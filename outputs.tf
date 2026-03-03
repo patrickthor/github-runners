@@ -19,41 +19,45 @@ output "key_vault_id" {
 }
 
 output "storage_account_id" {
-  description = "The ID of the Storage Account"
+  description = "The ID of the primary Storage Account"
   value       = azurerm_storage_account.storage.id
 }
 
-output "storage_account_primary_blob_endpoint" {
-  description = "The primary blob endpoint of the Storage Account"
-  value       = azurerm_storage_account.storage.primary_blob_endpoint
+output "function_storage_account_id" {
+  description = "The ID of the Function App storage account"
+  value       = azurerm_storage_account.functions.id
 }
 
-output "runner_identities" {
-  description = "The principal IDs of the runner managed identities"
+output "function_app_name" {
+  description = "Event-driven scaler Function App name"
+  value       = azurerm_linux_function_app.scaler.name
+}
+
+output "function_app_default_hostname" {
+  description = "Default hostname of scaler Function App"
+  value       = azurerm_linux_function_app.scaler.default_hostname
+}
+
+output "servicebus_namespace_name" {
+  description = "Service Bus namespace name used for scale events"
+  value       = azurerm_servicebus_namespace.scaler.name
+}
+
+output "servicebus_queue_name" {
+  description = "Service Bus queue name used for scale requests"
+  value       = azurerm_servicebus_queue.scale_requests.name
+}
+
+output "runner_pull_identity" {
+  description = "Shared user-assigned identity used by dynamically created ACI runners for ACR pull"
   value = {
-    for idx, runner in azurerm_container_group.runner : idx => {
-      system_assigned_principal_id = runner.identity[0].principal_id
-      user_assigned_principal_id   = azurerm_user_assigned_identity.acr_pull[idx].principal_id
-    }
+    id           = azurerm_user_assigned_identity.runner_pull.id
+    client_id    = azurerm_user_assigned_identity.runner_pull.client_id
+    principal_id = azurerm_user_assigned_identity.runner_pull.principal_id
   }
 }
 
-output "runner_names" {
-  description = "The names of the deployed container groups"
-  value       = [for runner in azurerm_container_group.runner : runner.name]
-}
-
-output "runner_ids" {
-  description = "The IDs of the deployed container groups"
-  value       = [for runner in azurerm_container_group.runner : runner.id]
-}
-
-output "automation_account_name" {
-  description = "The name of the Automation Account for cleanup jobs"
-  value       = azurerm_automation_account.cleanup.name
-}
-
-output "cleanup_runbook_name" {
-  description = "The name of the cleanup runbook"
-  value       = azurerm_automation_runbook.cleanup_runners.name
+output "scaler_identity_principal_id" {
+  description = "System-assigned principal ID for scaler Function App"
+  value       = azurerm_linux_function_app.scaler.identity[0].principal_id
 }

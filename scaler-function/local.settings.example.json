@@ -1,0 +1,28 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "SERVICEBUS_CONNECTION_STRING": "Endpoint=sb://...",
+    "SERVICEBUS_QUEUE_NAME": "runner-scale-requests",
+    "RUNNER_RESOURCE_GROUP": "pocgithubrunners",
+    "RUNNER_NAME_PREFIX": "runnerpocbouvet",
+    "RUNNER_IMAGE": "runnerpocbouvetacr.azurecr.io/actions-runner:latest",
+    "RUNNER_LABELS": "azure,container-instance,self-hosted",
+    "RUNNER_CPU": "2",
+    "RUNNER_MEMORY": "4",
+    "RUNNER_MIN_INSTANCES": "0",
+    "RUNNER_MAX_INSTANCES": "10",
+    "RUNNER_IDLE_TIMEOUT_MIN": "15",
+    "MAX_RUNNER_RUNTIME_HOURS": "8",
+    "EVENT_POLL_INTERVAL_SEC": "5",
+    "RUNNER_PULL_IDENTITY_ID": "/subscriptions/.../resourceGroups/.../providers/Microsoft.ManagedIdentity/userAssignedIdentities/...",
+    "GITHUB_REPO": "bouvet/short-lived-runners",
+    "GITHUB_ORG": "bouvet",
+    "GITHUB_ENVIRONMENT": "production",
+    "GITHUB_APP_ID": "<github_app_id>",
+    "GITHUB_APP_INSTALLATION_ID": "<github_app_installation_id>",
+    "GITHUB_APP_PRIVATE_KEY": "-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----",
+    "WEBHOOK_SECRET": "replace-me"
+  }
+}

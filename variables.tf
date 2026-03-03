@@ -18,7 +18,7 @@ variable "acr_name" {
 }
 
 variable "aci_name" {
-  description = "Name prefix for Azure Container Instances"
+  description = "Name prefix for dynamically created Azure Container Instance runners"
   type        = string
 }
 
@@ -57,7 +57,7 @@ variable "github_environment" {
 }
 
 variable "cpu" {
-  description = "Number of CPU cores per runner instance"
+  description = "Default CPU cores for dynamically spawned runner instances"
   type        = number
   default     = 2
   validation {
@@ -67,7 +67,7 @@ variable "cpu" {
 }
 
 variable "memory" {
-  description = "Memory in GB per runner instance"
+  description = "Default memory (GB) for dynamically spawned runner instances"
   type        = number
   default     = 4
   validation {
@@ -76,13 +76,33 @@ variable "memory" {
   }
 }
 
-variable "instance_count" {
-  description = "Number of runner instances to deploy"
+variable "runner_min_instances" {
+  description = "Minimum number of runner instances to keep available"
   type        = number
-  default     = 1
+  default     = 0
   validation {
-    condition     = var.instance_count >= 1 && var.instance_count <= 10
-    error_message = "Instance count must be between 1 and 10."
+    condition     = var.runner_min_instances >= 0 && var.runner_min_instances <= 50
+    error_message = "runner_min_instances must be between 0 and 50."
+  }
+}
+
+variable "runner_max_instances" {
+  description = "Maximum number of runner instances that the scaler may create"
+  type        = number
+  default     = 10
+  validation {
+    condition     = var.runner_max_instances >= 1 && var.runner_max_instances <= 200
+    error_message = "runner_max_instances must be between 1 and 200."
+  }
+}
+
+variable "runner_idle_timeout_minutes" {
+  description = "Idle timeout in minutes before scaler should terminate unused runners"
+  type        = number
+  default     = 15
+  validation {
+    condition     = var.runner_idle_timeout_minutes >= 1 && var.runner_idle_timeout_minutes <= 240
+    error_message = "runner_idle_timeout_minutes must be between 1 and 240."
   }
 }
 
@@ -128,34 +148,81 @@ variable "storage_account_replication_type" {
   }
 }
 
-variable "github_runner_token" {
-  description = "GitHub runner registration token (generate using: gh api repos/{owner}/{repo}/actions/runners/registration-token --jq .token)"
+variable "github_app_id_secret_name" {
+  description = "Key Vault secret name containing GitHub App ID."
   type        = string
-  sensitive   = true
+  default     = "runnerpocbouvet-github-app-id"
 }
 
-variable "cleanup_frequency_hours" {
-  description = "How many times per day to run cleanup job (e.g., 4 = every 6 hours)"
-  type        = number
-  default     = 4
+variable "github_app_installation_id_secret_name" {
+  description = "Key Vault secret name containing GitHub App installation ID."
+  type        = string
+  default     = "runnerpocbouvet-github-app-installation-id"
+}
+
+variable "github_app_private_key_secret_name" {
+  description = "Key Vault secret name containing GitHub App private key PEM."
+  type        = string
+  default     = "runnerpocbouvet-github-app-private-key"
+}
+
+variable "webhook_secret_secret_name" {
+  description = "Optional Key Vault secret name containing webhook secret for GitHub signature validation."
+  type        = string
+  default     = null
+}
+
+variable "servicebus_namespace_name" {
+  description = "Name of Service Bus namespace for runner scale events (must be globally unique)"
+  type        = string
   validation {
-    condition     = var.cleanup_frequency_hours >= 1 && var.cleanup_frequency_hours <= 24
-    error_message = "Cleanup frequency must be between 1 and 24 times per day."
+    condition     = can(regex("^[a-z0-9-]{6,50}$", var.servicebus_namespace_name))
+    error_message = "Service Bus namespace name must be 6-50 characters of lowercase letters, numbers, and hyphens."
+  }
+}
+
+variable "servicebus_queue_name" {
+  description = "Queue name used to buffer scale requests"
+  type        = string
+  default     = "runner-scale-requests"
+}
+
+variable "function_app_name" {
+  description = "Name of Function App that ingests events and scales runners (must be globally unique)"
+  type        = string
+}
+
+variable "function_storage_account_name" {
+  description = "Storage account name for Azure Functions runtime (must be globally unique)"
+  type        = string
+  validation {
+    condition     = can(regex("^[a-z0-9]{3,24}$", var.function_storage_account_name))
+    error_message = "Function storage account name must be 3-24 lowercase alphanumeric characters."
+  }
+}
+
+variable "function_runtime_version" {
+  description = "Python runtime version for the scaler Function App"
+  type        = string
+  default     = "3.11"
+}
+
+variable "event_poll_interval_seconds" {
+  description = "Polling cadence used by scaler worker when processing queue messages"
+  type        = number
+  default     = 5
+  validation {
+    condition     = var.event_poll_interval_seconds >= 1 && var.event_poll_interval_seconds <= 60
+    error_message = "event_poll_interval_seconds must be between 1 and 60."
   }
 }
 
 variable "max_runner_runtime_hours" {
-  description = "Maximum hours a runner can run before being considered stuck and removed"
+  description = "Maximum hours a dynamically spawned runner can run before scaler marks it stale"
   type        = number
   default     = 8
   validation {
     condition     = var.max_runner_runtime_hours >= 1 && var.max_runner_runtime_hours <= 24
     error_message = "Max runtime must be between 1 and 24 hours."
   }
-}
-
-variable "runner_image" {
-  description = "Container image for GitHub runners (should be pushed to the ACR first)"
-  type        = string
-  default     = "actions-runner:latest"
 }
