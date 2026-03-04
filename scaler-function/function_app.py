@@ -523,6 +523,19 @@ def github_webhook(req: func.HttpRequest) -> func.HttpResponse:
         payload = req.get_json()
         event_name = req.headers.get("X-GitHub-Event", "unknown")
 
+        # Only process workflow_job events
+        if event_name == "ping":
+            return func.HttpResponse("pong", status_code=200)
+        if event_name != "workflow_job":
+            logging.info("Ignoring event type: %s", event_name)
+            return func.HttpResponse("ignored", status_code=200)
+
+        # Only process jobs targeting self-hosted runners
+        job_labels = [str(l).lower() for l in ((payload.get("workflow_job") or {}).get("labels") or [])]
+        if "self-hosted" not in job_labels:
+            logging.info("Ignoring workflow_job not targeting self-hosted (labels=%s)", job_labels)
+            return func.HttpResponse("ignored", status_code=200)
+
         message = {
             "event": event_name,
             "received_at": _utcnow().isoformat(),
