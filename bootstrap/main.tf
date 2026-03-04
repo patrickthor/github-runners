@@ -31,7 +31,7 @@ resource "azurerm_storage_account" "state" {
   account_kind                    = "StorageV2"
   min_tls_version                 = "TLS1_2"
   https_traffic_only_enabled      = true
-  public_network_access_enabled   = false
+  public_network_access_enabled   = true
   shared_access_key_enabled       = false
   allow_nested_items_to_be_public = false
 
@@ -52,7 +52,7 @@ resource "azurerm_storage_account" "state" {
   }
 
   network_rules {
-    default_action = "Deny"
+    default_action = "Allow"
     bypass         = ["AzureServices"]
   }
 
