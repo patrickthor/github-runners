@@ -63,15 +63,17 @@ jobs:
 
       - name: Generate bootstrap tfvars
         env:
-          RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-          LOCATION: ${{ vars.AZURE_LOCATION }}
+          RESOURCE_GROUP:  ${{ vars.AZURE_RESOURCE_GROUP }}
+          LOCATION:        ${{ vars.AZURE_LOCATION }}
+          SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           STORAGE_ACCOUNT: ${{ vars.STATE_STORAGE_ACCOUNT_NAME }}
-          CONTAINER: ${{ vars.STATE_CONTAINER_NAME || 'tfstate' }}
-          SKIP_CREATE: ${{ inputs.skip_create }}
+          CONTAINER:       ${{ vars.STATE_CONTAINER_NAME || 'tfstate' }}
+          SKIP_CREATE:     ${{ inputs.skip_create }}
         run: |
           cat > terraform.tfvars <<EOF
           resource_group_name        = "$RESOURCE_GROUP"
           location                   = "$LOCATION"
+          subscription_id            = "$SUBSCRIPTION_ID"
           state_storage_account_name = "$STORAGE_ACCOUNT"
           state_container_name       = "$CONTAINER"
           use_existing_storage       = $SKIP_CREATE

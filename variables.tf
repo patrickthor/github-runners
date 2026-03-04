@@ -8,6 +8,15 @@ variable "location" {
   type        = string
 }
 
+variable "subscription_id" {
+  description = "Azure subscription ID to deploy resources into"
+  type        = string
+  validation {
+    condition     = can(regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", var.subscription_id))
+    error_message = "subscription_id must be a valid UUID."
+  }
+}
+
 variable "acr_name" {
   description = "Name of the Azure Container Registry (must be globally unique)"
   type        = string

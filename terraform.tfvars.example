@@ -2,6 +2,7 @@
 
 resource_group_name  = "rg-runner-poc-bvt"
 location             = "westeurope"
+subscription_id      = "00000000-0000-0000-0000-000000000000"  # az account show --query id -o tsv
 acr_name             = "crrunnerpocbvt"        # no hyphens — ACR allows alphanumeric only
 aci_name             = "ci-runner-poc-bvt"     # container instance prefix; also seeds asp/appi/id names
 key_vault_name       = "kv-runner-poc-bvt"

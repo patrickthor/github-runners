@@ -4,12 +4,6 @@
 
 data "azurerm_client_config" "current" {}
 
-data "archive_file" "scaler_package" {
-  type        = "zip"
-  source_dir  = "${path.module}/scaler-function"
-  output_path = "${path.module}/.terraform/scaler-function.zip"
-}
-
 locals {
   has_github_app_id     = var.github_app_id_secret_name != null && trimspace(var.github_app_id_secret_name) != ""
   has_github_app_inst   = var.github_app_installation_id_secret_name != null && trimspace(var.github_app_installation_id_secret_name) != ""
@@ -26,8 +20,6 @@ locals {
     SCM_DO_BUILD_DURING_DEPLOYMENT = "true"
     ENABLE_ORYX_BUILD              = "true"
     FUNCTIONS_WORKER_RUNTIME       = "python"
-    SCALER_PACKAGE_SHA             = data.archive_file.scaler_package.output_sha
-
     SERVICEBUS_QUEUE_NAME        = var.servicebus_queue_name
     SERVICEBUS_NAMESPACE_FQDN    = "${azurerm_servicebus_namespace.scaler.name}.servicebus.windows.net"
     SERVICEBUS_CONNECTION_STRING = azurerm_servicebus_namespace_authorization_rule.scaler.primary_connection_string
@@ -73,18 +65,6 @@ resource "azurerm_container_registry" "acr" {
   network_rule_bypass_option = "AzureServices"
 
   tags = var.tags
-}
-
-resource "null_resource" "runner_image_import" {
-  triggers = {
-    acr_name = azurerm_container_registry.acr.name
-  }
-
-  depends_on = [azurerm_container_registry.acr]
-
-  provisioner "local-exec" {
-    command = "az acr import --name ${azurerm_container_registry.acr.name} --source ghcr.io/myoung34/docker-github-actions-runner:latest --image actions-runner:latest --force"
-  }
 }
 
 resource "azurerm_key_vault" "kv" {
@@ -262,27 +242,6 @@ resource "azurerm_linux_function_app" "scaler" {
   }
 
   tags = var.tags
-}
-
-# Deploy the function package only after the app and all its settings are fully
-# applied. Using az functionapp deployment source config-zip avoids the race
-# condition that exists when Terraform's built-in zip_deploy_file attribute
-# uploads the zip while a concurrent app-settings change is still restarting
-# the host, which prevents the Oryx build from running and leaves the runtime
-# unable to discover the functions.
-resource "null_resource" "scaler_zip_deploy" {
-  triggers = {
-    package_sha = data.archive_file.scaler_package.output_sha
-  }
-
-  depends_on = [
-    azurerm_linux_function_app.scaler,
-    azurerm_role_assignment.scaler_keyvault_secrets_user,
-  ]
-
-  provisioner "local-exec" {
-    command = "az functionapp deployment source config-zip --resource-group '${var.resource_group_name}' --name '${var.function_app_name}' --src '${data.archive_file.scaler_package.output_path}' --build-remote true --timeout 300"
-  }
 }
 
 resource "azurerm_role_assignment" "scaler_contributor" {

@@ -222,6 +222,7 @@ git push
 |---|---|
 | `resource_group_name` | Azure resource group |
 | `location` | Azure region (e.g. `westeurope`) |
+| `subscription_id` | Azure subscription ID |
 | `acr_name` | Container Registry name — alphanumeric only, globally unique |
 | `aci_name` | ACI runner name prefix; seeds `id-`, `asp-`, `appi-` names |
 | `key_vault_name` | Key Vault name — globally unique |
