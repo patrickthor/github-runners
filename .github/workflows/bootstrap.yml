@@ -79,12 +79,6 @@ jobs:
           use_existing_storage       = $SKIP_CREATE
           EOF
 
-      - name: Create resource group (idempotent)
-        env:
-          RG:       ${{ vars.AZURE_RESOURCE_GROUP }}
-          LOCATION: ${{ vars.AZURE_LOCATION }}
-        run: az group create --name "$RG" --location "$LOCATION"
-
       - name: Terraform init
         run: terraform init -input=false
 

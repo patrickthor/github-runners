@@ -175,7 +175,6 @@ The bootstrap module creates the Storage Account and blob container that holds T
 Trigger via GitHub Actions: **Actions → Bootstrap → Run workflow** (leave *skip_create* unchecked for a first run).
 
 The workflow will:
-- Create the resource group (idempotent)
 - Run `terraform apply` in `bootstrap/` to provision the storage account and blob container
 - Grant the CI identity `Storage Blob Data Contributor` on the state storage
 - Print the backend config snippet in the job summary
