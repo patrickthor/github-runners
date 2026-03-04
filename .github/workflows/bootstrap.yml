@@ -95,12 +95,17 @@ jobs:
         run: |
           PRINCIPAL_ID=$(az ad sp show --id "$CLIENT_ID" --query id -o tsv)
           STORAGE_ID=$(az storage account show --name "$STORAGE" --resource-group "$RG" --query id -o tsv)
-          az role assignment create \
-            --assignee-object-id "$PRINCIPAL_ID" \
-            --assignee-principal-type ServicePrincipal \
-            --role "Storage Blob Data Contributor" \
-            --scope "$STORAGE_ID" \
-            --condition-version "2.0" 2>/dev/null || echo "Role already assigned."
+          if az role assignment list --assignee "$PRINCIPAL_ID" --scope "$STORAGE_ID" \
+               --query "[?roleDefinitionName=='Storage Blob Data Contributor']" -o tsv | grep -q .; then
+            echo "Role already assigned — skipping."
+          else
+            az role assignment create \
+              --assignee-object-id "$PRINCIPAL_ID" \
+              --assignee-principal-type ServicePrincipal \
+              --role "Storage Blob Data Contributor" \
+              --scope "$STORAGE_ID"
+            echo "Role assigned successfully."
+          fi
 
       - name: Print backend config snippet
         run: terraform output -raw backend_hcl_snippet
