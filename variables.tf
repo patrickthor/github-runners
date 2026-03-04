@@ -13,7 +13,7 @@ variable "subscription_id" {
   type        = string
   validation {
     condition     = can(regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", var.subscription_id))
-    error_message = "subscription_id must be a valid UUID."
+    error_message = "The subscription_id must be a valid UUID."
   }
 }
 
