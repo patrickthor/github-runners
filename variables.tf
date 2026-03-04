@@ -91,7 +91,7 @@ variable "runner_min_instances" {
   default     = 0
   validation {
     condition     = var.runner_min_instances >= 0 && var.runner_min_instances <= 50
-    error_message = "runner_min_instances must be between 0 and 50."
+    error_message = "The runner_min_instances must be between 0 and 50."
   }
 }
 
@@ -101,7 +101,7 @@ variable "runner_max_instances" {
   default     = 10
   validation {
     condition     = var.runner_max_instances >= 1 && var.runner_max_instances <= 200
-    error_message = "runner_max_instances must be between 1 and 200."
+    error_message = "The runner_max_instances must be between 1 and 200."
   }
 }
 
@@ -111,7 +111,7 @@ variable "runner_idle_timeout_minutes" {
   default     = 15
   validation {
     condition     = var.runner_idle_timeout_minutes >= 1 && var.runner_idle_timeout_minutes <= 240
-    error_message = "runner_idle_timeout_minutes must be between 1 and 240."
+    error_message = "The runner_idle_timeout_minutes must be between 1 and 240."
   }
 }
 
@@ -222,7 +222,7 @@ variable "event_poll_interval_seconds" {
   default     = 5
   validation {
     condition     = var.event_poll_interval_seconds >= 1 && var.event_poll_interval_seconds <= 60
-    error_message = "event_poll_interval_seconds must be between 1 and 60."
+    error_message = "The event_poll_interval_seconds must be between 1 and 60."
   }
 }
 

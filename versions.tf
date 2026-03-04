@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.0"
+  required_version = ">= 1.3"
 
   # Partial backend — supply the remaining values with:
   #   terraform init -backend-config=backend.hcl
