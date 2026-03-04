@@ -25,5 +25,9 @@ scaler-function/.python_packages/
 scaler-function/.venv/
 scaler-function/local.settings.json
 
+# Build artifacts
+*.zip
+
 # Temporary/debug scripts
 .tmp_*
+_test_*.py
