@@ -86,57 +86,49 @@ terraform apply
 
 If the storage account already exists (e.g. re-running on an existing environment), set `use_existing_storage = true` in `bootstrap/terraform.tfvars` — the module will adopt it instead of creating it.
 
-Generate the backend config file:
-
-```bash
-terraform output -raw backend_hcl_snippet > ../backend.hcl
-cd ..
-```
+The bootstrap workflow will print a backend config snippet at the end — you can use this to verify values match your GitHub variables.
 
 ---
 
-### 3. Configure main module
+### 3. Configure GitHub Actions variables and secrets
 
-```bash
-cp terraform.tfvars.example terraform.tfvars
-```
+In your repository go to **Settings → Secrets and variables → Actions**.
 
-Edit `terraform.tfvars`:
+**Secrets** (sensitive):
 
-```hcl
-resource_group_name  = "rg-runner-poc-bvt"
-location             = "westeurope"
-acr_name             = "crrunnerpocbvt"       # alphanumeric only
-aci_name             = "ci-runner-poc-bvt"    # also seeds id-, asp-, appi- names
-key_vault_name       = "kv-runner-poc-bvt"
-storage_account_name = "strunnerpocbvt"       # state storage (managed by bootstrap)
+| Secret | Value |
+|---|---|
+| `AZURE_CLIENT_ID` | App Registration or managed identity client ID |
+| `AZURE_TENANT_ID` | Azure AD tenant ID |
+| `AZURE_SUBSCRIPTION_ID` | Target subscription ID |
 
-github_org  = "your-org"
-github_repo = "your-org/your-repo"
+**Variables** (non-sensitive):
 
-servicebus_namespace_name     = "sbns-runner-poc-bvt"
-function_app_name             = "func-runner-poc-bvt"
-function_storage_account_name = "stfnrunnerpocbvt"   # alphanumeric only
+| Variable | Example value |
+|---|---|
+| `AZURE_RESOURCE_GROUP` | `rg-runner-poc-bvt` |
+| `AZURE_LOCATION` | `westeurope` |
+| `ACR_NAME` | `crrunnerpocbvt` |
+| `ACI_NAME` | `ci-runner-poc-bvt` |
+| `KEY_VAULT_NAME` | `kv-runner-poc-bvt` |
+| `STATE_STORAGE_ACCOUNT_NAME` | `strunnerpocbvt` |
+| `STATE_CONTAINER_NAME` | `tfstate` |
+| `FUNCTION_STORAGE_ACCOUNT_NAME` | `stfnrunnerpocbvt` |
+| `FUNCTION_APP_NAME` | `func-runner-poc-bvt` |
+| `SERVICEBUS_NAMESPACE_NAME` | `sbns-runner-poc-bvt` |
+| `GITHUB_ORG` | `your-org` |
+| `GITHUB_REPO` | `your-org/your-repo` |
 
-runner_min_instances = 0
-runner_max_instances = 10
-```
+> **OIDC setup**: The `AZURE_CLIENT_ID` must belong to an App Registration with a federated credential configured for this repository. In Azure Portal: App Registration → Certificates & secrets → Federated credentials → Add credential → GitHub Actions.
 
 ---
 
-### 4. Deploy infrastructure
+### 4. Deploy infrastructure + code (push to `main`)
 
-```bash
-terraform init -backend-config=backend.hcl
-terraform plan
-terraform apply
-```
+Push any commit to `main` — the **Deploy** workflow runs automatically:
 
-Or use the Makefile:
-
-```bash
-make infra
-```
+- **Stage 2 — Infrastructure**: generates `backend.hcl` and `terraform.tfvars` from your GitHub variables, runs `terraform init`, `plan`, and `apply`.
+- **Stage 3 — Function App code**: publishes `scaler-function/` via `func azure functionapp publish --python --build remote`.
 
 ---
 
@@ -179,22 +171,7 @@ The Function App is granted `Key Vault Secrets User` automatically by this modul
 
 ---
 
-### 6. Deploy the Function App code
-
-```bash
-cd scaler-function
-func azure functionapp publish func-runner-poc-bvt --python --build remote
-```
-
-Or:
-
-```bash
-make deploy
-```
-
----
-
-### 7. Register the webhook in GitHub
+### 6. Register the webhook in GitHub
 
 From the Terraform output:
 
@@ -220,16 +197,19 @@ az functionapp function keys list \
 
 ---
 
-## Makefile targets
+## GitHub Actions workflows
 
-```
-make bootstrap       # Step 2 — provision remote state storage
-make infra           # Step 4 — init + apply main module
-make deploy          # Step 6 — publish Function App code
-make all             # bootstrap → infra → deploy
+| Workflow | Trigger | Stages |
+|---|---|---|
+| `bootstrap.yml` | Manual (`workflow_dispatch`) | Stage 1 — provision Terraform state storage |
+| `deploy.yml` | Push to `main` or manual | Stage 2 — Terraform infra; Stage 3 — Function App code |
+| `release.yml` | Push to `main` | Semantic versioning + GitHub Release |
 
-make migrate-state   # One-time: remove azurerm_storage_account.storage from
-                     # existing local state before switching to remote backend
+**Migrating an existing environment** (state is currently local): remove the old storage account resource from state before the first CI run, then push to main:
+
+```bash
+terraform state rm azurerm_storage_account.storage
+git push
 ```
 
 ---

@@ -1,0 +1,87 @@
+# ==============================================================================
+# Bootstrap — one-time setup of Terraform remote state storage
+#
+# Run this ONCE before the first deployment:
+#   GitHub → Actions → Bootstrap → Run workflow
+#
+# If the storage account already exists from a previous bootstrap run, set
+# the "skip_create" input to true — the job will adopt it and only ensures
+# the blob container.
+#
+# Required GitHub configuration (Settings → Secrets and variables):
+#
+#   Secrets:
+#     AZURE_CLIENT_ID       — App Registration / managed identity client ID
+#     AZURE_TENANT_ID       — Azure AD tenant ID
+#     AZURE_SUBSCRIPTION_ID — Target subscription ID
+#
+#   Variables:
+#     AZURE_RESOURCE_GROUP         — e.g. rg-runner-poc-bvt
+#     AZURE_LOCATION               — e.g. westeurope
+#     STATE_STORAGE_ACCOUNT_NAME   — e.g. strunnerpocbvt
+#     STATE_CONTAINER_NAME         — e.g. tfstate  (optional, defaults below)
+# ==============================================================================
+
+name: Bootstrap
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_create:
+        description: "Storage account already exists — adopt instead of create"
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write   # required for OIDC
+  contents: read
+
+jobs:
+  bootstrap:
+    name: Provision state storage
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: bootstrap
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~> 1.0"
+
+      - name: Generate bootstrap tfvars
+        env:
+          RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          LOCATION: ${{ vars.AZURE_LOCATION }}
+          STORAGE_ACCOUNT: ${{ vars.STATE_STORAGE_ACCOUNT_NAME }}
+          CONTAINER: ${{ vars.STATE_CONTAINER_NAME || 'tfstate' }}
+          SKIP_CREATE: ${{ inputs.skip_create }}
+        run: |
+          cat > terraform.tfvars <<EOF
+          resource_group_name        = "$RESOURCE_GROUP"
+          location                   = "$LOCATION"
+          state_storage_account_name = "$STORAGE_ACCOUNT"
+          state_container_name       = "$CONTAINER"
+          use_existing_storage       = $SKIP_CREATE
+          EOF
+
+      - name: Terraform init
+        run: terraform init -input=false
+
+      - name: Terraform apply
+        run: terraform apply -auto-approve -input=false
+
+      - name: Print backend config snippet
+        run: terraform output -raw backend_hcl_snippet

@@ -1,0 +1,161 @@
+# ==============================================================================
+# Deploy — Stage 2 (infra) + Stage 3 (code)
+#
+# Triggered automatically on push to main, or manually via workflow_dispatch.
+# Requires the Bootstrap workflow to have run at least once first.
+#
+# Required GitHub configuration (Settings → Secrets and variables):
+#
+#   Secrets:
+#     AZURE_CLIENT_ID       — App Registration / managed identity client ID
+#     AZURE_TENANT_ID       — Azure AD tenant ID
+#     AZURE_SUBSCRIPTION_ID — Target subscription ID
+#
+#   Variables (non-sensitive):
+#     AZURE_RESOURCE_GROUP             — e.g. rg-runner-poc-bvt
+#     AZURE_LOCATION                   — e.g. westeurope
+#     ACR_NAME                         — e.g. crrunnerpocbvt
+#     ACI_NAME                         — e.g. ci-runner-poc-bvt
+#     KEY_VAULT_NAME                   — e.g. kv-runner-poc-bvt
+#     STATE_STORAGE_ACCOUNT_NAME       — e.g. strunnerpocbvt
+#     STATE_CONTAINER_NAME             — e.g. tfstate
+#     FUNCTION_STORAGE_ACCOUNT_NAME    — e.g. stfnrunnerpocbvt
+#     FUNCTION_APP_NAME                — e.g. func-runner-poc-bvt
+#     SERVICEBUS_NAMESPACE_NAME        — e.g. sbns-runner-poc-bvt
+#     GITHUB_ORG                       — e.g. patrickthor
+#     GITHUB_REPO                      — e.g. patrickthor/github-runners
+# ==============================================================================
+
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # required for OIDC
+  contents: read
+
+jobs:
+  # ----------------------------------------------------------------------------
+  # Stage 2 — Infrastructure
+  # ----------------------------------------------------------------------------
+  infra:
+    name: "Stage 2 — Infrastructure"
+    runs-on: ubuntu-latest
+
+    outputs:
+      function_app_name:  ${{ steps.tf-output.outputs.function_app_name }}
+      resource_group:     ${{ vars.AZURE_RESOURCE_GROUP }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~> 1.0"
+          terraform_wrapper: false   # needed for clean output capture
+
+      - name: Generate backend.hcl
+        env:
+          RG:      ${{ vars.AZURE_RESOURCE_GROUP }}
+          STORAGE: ${{ vars.STATE_STORAGE_ACCOUNT_NAME }}
+          CONTAINER: ${{ vars.STATE_CONTAINER_NAME || 'tfstate' }}
+        run: |
+          cat > backend.hcl <<EOF
+          resource_group_name  = "$RG"
+          storage_account_name = "$STORAGE"
+          container_name       = "$CONTAINER"
+          key                  = "github-runners.tfstate"
+          use_azuread_auth     = true
+          EOF
+
+      - name: Generate terraform.tfvars
+        env:
+          RG:           ${{ vars.AZURE_RESOURCE_GROUP }}
+          LOCATION:     ${{ vars.AZURE_LOCATION }}
+          ACR_NAME:     ${{ vars.ACR_NAME }}
+          ACI_NAME:     ${{ vars.ACI_NAME }}
+          KV_NAME:      ${{ vars.KEY_VAULT_NAME }}
+          STATE_ST:     ${{ vars.STATE_STORAGE_ACCOUNT_NAME }}
+          FUNC_ST:      ${{ vars.FUNCTION_STORAGE_ACCOUNT_NAME }}
+          FUNC_APP:     ${{ vars.FUNCTION_APP_NAME }}
+          SBNS:         ${{ vars.SERVICEBUS_NAMESPACE_NAME }}
+          GH_ORG:       ${{ vars.GITHUB_ORG }}
+          GH_REPO:      ${{ vars.GITHUB_REPO }}
+        run: |
+          cat > terraform.tfvars <<EOF
+          resource_group_name           = "$RG"
+          location                      = "$LOCATION"
+          acr_name                      = "$ACR_NAME"
+          aci_name                      = "$ACI_NAME"
+          key_vault_name                = "$KV_NAME"
+          storage_account_name          = "$STATE_ST"
+          function_storage_account_name = "$FUNC_ST"
+          function_app_name             = "$FUNC_APP"
+          servicebus_namespace_name     = "$SBNS"
+          github_org                    = "$GH_ORG"
+          github_repo                   = "$GH_REPO"
+          EOF
+
+      - name: Terraform init
+        run: terraform init -input=false -backend-config=backend.hcl
+
+      - name: Terraform plan
+        run: terraform plan -out=tfplan -input=false
+
+      - name: Terraform apply
+        run: terraform apply -auto-approve -input=false tfplan
+
+      - name: Capture outputs
+        id: tf-output
+        run: |
+          echo "function_app_name=$(terraform output -raw function_app_name)" >> "$GITHUB_OUTPUT"
+
+  # ----------------------------------------------------------------------------
+  # Stage 3 — Function App code
+  # ----------------------------------------------------------------------------
+  deploy:
+    name: "Stage 3 — Function App code"
+    needs: infra
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: scaler-function
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Azure Functions Core Tools
+        run: npm install -g azure-functions-core-tools@4 --unsafe-perm
+
+      - name: Publish function app
+        run: |
+          func azure functionapp publish "${{ needs.infra.outputs.function_app_name }}" \
+            --python \
+            --build remote
