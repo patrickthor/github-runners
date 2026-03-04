@@ -125,8 +125,22 @@ def _list_runners() -> list[dict[str, Any]]:
     prefix = _env("RUNNER_NAME_PREFIX", required=True)
     path = f"/resourceGroups/{rg}/providers/Microsoft.ContainerInstance/containerGroups?api-version={ARM_API_VERSION}"
     response = _arm_request("GET", path)
-    data = response.json().get("value", [])
-    return [item for item in data if item.get("name", "").startswith(prefix + "-")]
+    items = [
+        item for item in response.json().get("value", [])
+        if item.get("name", "").startswith(prefix + "-")
+    ]
+    # The list endpoint omits instanceView; fetch each individually to get full state.
+    result = []
+    for item in items:
+        name = item.get("name", "")
+        try:
+            detail_path = f"/resourceGroups/{rg}/providers/Microsoft.ContainerInstance/containerGroups/{name}?api-version={ARM_API_VERSION}"
+            detail_resp = _arm_request("GET", detail_path)
+            result.append(detail_resp.json())
+        except Exception:
+            logging.warning("Failed to GET individual runner %s; using list data", name)
+            result.append(item)
+    return result
 
 
 def _parse_github_timestamp(value: str) -> dt.datetime:
@@ -167,8 +181,18 @@ def _runner_created_at(runner: dict[str, Any]) -> dt.datetime | None:
 
 
 def _runner_state(runner: dict[str, Any]) -> str:
+    # Container group-level state (e.g. "Running", "Succeeded")
     state = ((runner.get("properties") or {}).get("instanceView") or {}).get("state")
-    return str(state or "").strip().lower()
+    if state:
+        return str(state).strip().lower()
+    # Fallback: per-container currentState (e.g. "Running", "Terminated")
+    containers = ((runner.get("properties") or {}).get("containers") or [])
+    if containers:
+        cs = (containers[0].get("instanceView") or {}).get("currentState") or {}
+        container_state = cs.get("state")
+        if container_state:
+            return str(container_state).strip().lower()
+    return ""
 
 
 def _runner_workflow_job_id(runner: dict[str, Any]) -> str:
