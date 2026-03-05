@@ -169,14 +169,19 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Azure Functions Core Tools
-        run: npm install -g azure-functions-core-tools@4 --unsafe-perm
-
-      - name: Install Python dependencies
-        run: pip install --target=".python_packages/lib/site-packages" -r requirements.txt
-
-      - name: Publish function app
+      - name: Create deployment zip
         run: |
-          func azure functionapp publish "${{ needs.infra.outputs.function_app_name }}" \
-            --python \
-            --no-build
+          zip -r ../deploy.zip . -x "local.settings*.json" -x "__pycache__/*" -x "*.pyc"
+
+      - name: Deploy zip to Function App
+        run: |
+          az functionapp config appsettings delete \
+            --resource-group "${{ needs.infra.outputs.resource_group }}" \
+            --name "${{ needs.infra.outputs.function_app_name }}" \
+            --setting-names WEBSITE_RUN_FROM_PACKAGE 2>/dev/null || true
+          az functionapp deployment source config-zip \
+            --resource-group "${{ needs.infra.outputs.resource_group }}" \
+            --name "${{ needs.infra.outputs.function_app_name }}" \
+            --src ../deploy.zip \
+            --build-remote true \
+            --timeout 300
