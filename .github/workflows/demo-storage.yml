@@ -28,6 +28,8 @@ jobs:
     env:
       ARM_SUBSCRIPTION_ID: 61a5c972-6381-4d85-b1e0-032d5b3246b3
       ARM_USE_MSI: true
+      # ARM_CLIENT_ID is injected by the scaler function into the ACI container environment
+      # It holds the client ID of the runner_pull user-assigned managed identity
 
     steps:
       - name: Checkout

@@ -394,11 +394,16 @@ def _create_runner(workflow_job_id: str = "") -> str:
     cpu = _int_env("RUNNER_CPU", 2)
     memory = _int_env("RUNNER_MEMORY", 4)
 
+    pull_identity_client_id = _env("RUNNER_PULL_IDENTITY_CLIENT_ID", required=True)
+
     environment_variables = [
         {"name": "REPO_URL", "value": f"https://github.com/{repo}"},
         {"name": "RUNNER_NAME", "value": runner_name},
         {"name": "LABELS", "value": labels},
         {"name": "EPHEMERAL", "value": "true"},
+        # ARM_CLIENT_ID tells azurerm/terraform which user-assigned managed identity
+        # to use when authenticating via IMDS (ARM_USE_MSI=true)
+        {"name": "ARM_CLIENT_ID", "value": pull_identity_client_id},
     ]
     secure_environment_variables = [{"name": key, "secureValue": value} for key, value in _runner_secure_env().items()]
 
