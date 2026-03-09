@@ -115,8 +115,8 @@ resource "azurerm_servicebus_queue" "scale_requests" {
   name         = var.servicebus_queue_name
   namespace_id = azurerm_servicebus_namespace.scaler.id
 
-  max_delivery_count = 10
-  lock_duration      = "PT1M"
+  max_delivery_count = 30
+  lock_duration      = "PT2M"
 }
 
 resource "azurerm_servicebus_namespace_authorization_rule" "scaler" {
