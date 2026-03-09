@@ -171,10 +171,10 @@ jobs:
 
       - name: Create deployment zip
         run: |
-          # Pre-install dependencies locally so --no-build can be used at deploy
-          # time. This bypasses the Kudu SCM validation that --build-remote true
-          # performs (which fails when the function app is mid-restart after
-          # Terraform applies new app settings).
+          # Pre-install dependencies so the zip is self-contained.
+          # az functionapp deploy (below) uses the onedeployment API which does
+          # not invoke Kudu SCM settings validation, avoiding the JSON parse
+          # failure that occurs when the app is mid-restart after Terraform.
           pip install \
             --target .python_packages/lib/site-packages \
             --upgrade \
@@ -190,9 +190,10 @@ jobs:
             --resource-group "${{ needs.infra.outputs.resource_group }}" \
             --name "${{ needs.infra.outputs.function_app_name }}" \
             --setting-names WEBSITE_RUN_FROM_PACKAGE 2>/dev/null || true
-          az functionapp deployment source config-zip \
+          az functionapp deploy \
             --resource-group "${{ needs.infra.outputs.resource_group }}" \
             --name "${{ needs.infra.outputs.function_app_name }}" \
-            --src ../deploy.zip \
-            --no-build \
+            --src-path ../deploy.zip \
+            --type zip \
+            --async true \
             --timeout 300
