@@ -106,7 +106,7 @@ resource "azurerm_servicebus_namespace" "scaler" {
   name                = var.servicebus_namespace_name
   location            = var.location
   resource_group_name = var.resource_group_name
-  sku                 = "Basic"
+  sku                 = "Standard"
 
   tags = var.tags
 }
@@ -115,8 +115,9 @@ resource "azurerm_servicebus_queue" "scale_requests" {
   name         = var.servicebus_queue_name
   namespace_id = azurerm_servicebus_namespace.scaler.id
 
-  max_delivery_count = 30
-  lock_duration      = "PT2M"
+  max_delivery_count  = 30
+  lock_duration       = "PT2M"
+  default_message_ttl = "P14D"
 }
 
 resource "azurerm_servicebus_namespace_authorization_rule" "scaler" {
