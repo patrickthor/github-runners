@@ -140,7 +140,7 @@ variable "enable_public_network_access" {
 variable "acr_sku" {
   description = "SKU for Azure Container Registry"
   type        = string
-  default     = "Standard"
+  default     = "Basic"
   validation {
     condition     = contains(["Basic", "Standard", "Premium"], var.acr_sku)
     error_message = "ACR SKU must be Basic, Standard, or Premium."
