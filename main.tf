@@ -17,7 +17,12 @@ locals {
   webhook_secret_secret_uri             = local.has_webhook_secret ? "${azurerm_key_vault.kv.vault_uri}secrets/${var.webhook_secret_secret_name}" : null
 
   scaler_base_settings = {
-    FUNCTIONS_WORKER_RUNTIME       = "python"
+    FUNCTIONS_WORKER_RUNTIME                 = "python"
+    # Explicitly manage content storage settings — the azurerm provider sets
+    # these via storage_account_name/key but does NOT restore them if deleted
+    # manually outside Terraform (e.g. by az functionapp config appsettings delete).
+    WEBSITE_CONTENTAZUREFILECONNECTIONSTRING = azurerm_storage_account.functions.primary_connection_string
+    WEBSITE_CONTENTSHARE                     = var.function_app_name
     SERVICEBUS_QUEUE_NAME        = var.servicebus_queue_name
     SERVICEBUS_NAMESPACE_FQDN    = "${azurerm_servicebus_namespace.scaler.name}.servicebus.windows.net"
     SERVICEBUS_CONNECTION_STRING = azurerm_servicebus_namespace_authorization_rule.scaler.primary_connection_string

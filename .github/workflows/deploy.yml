@@ -193,6 +193,19 @@ jobs:
             --resource-group "$RG" --name "$APP" \
             --setting-names WEBSITE_RUN_FROM_PACKAGE ENABLE_ORYX_BUILD SCM_DO_BUILD_DURING_DEPLOYMENT 2>/dev/null || true
 
+          # Ensure WEBSITE_CONTENT* settings exist — deleting them breaks the Y1
+          # Consumption plan (Kudu can't mount its file share and returns 503 forever).
+          # Terraform normally manages these but won't restore them if deleted outside TF.
+          ST_CONN=$(az storage account show-connection-string \
+            --resource-group "$RG" \
+            --name "${{ vars.FUNCTION_STORAGE_ACCOUNT_NAME }}" \
+            --query connectionString -o tsv)
+          az functionapp config appsettings set \
+            --resource-group "$RG" --name "$APP" \
+            --settings \
+              "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING=$ST_CONN" \
+              "WEBSITE_CONTENTSHARE=$APP" > /dev/null
+
           # Restart to ensure clean state after Terraform settings changes.
           echo "Restarting function app..."
           az functionapp restart --resource-group "$RG" --name "$APP"
