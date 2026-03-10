@@ -98,7 +98,7 @@ variable "runner_min_instances" {
 variable "runner_max_instances" {
   description = "Maximum number of runner instances that the scaler may create"
   type        = number
-  default     = 10
+  default     = 5
   validation {
     condition     = var.runner_max_instances >= 1 && var.runner_max_instances <= 200
     error_message = "The runner_max_instances must be between 1 and 200."
@@ -251,7 +251,7 @@ variable "runner_workload_roles" {
   type        = list(string)
   default     = ["Contributor"]
 }
-
+ACR
 variable "github_webhook_ip_ranges" {
   description = "GitHub webhook CIDR ranges allowed to reach the Function App HTTP trigger. Defaults to GitHub's published hook IP ranges. Set to [] to disable IP restriction."
   type        = list(string)

@@ -36,6 +36,10 @@ _installation_token_cache: dict[str, Any] = {
 TERMINAL_RUNNER_STATES = {"succeeded", "failed", "stopped", "terminated"}
 
 
+class _QuotaExceededError(Exception):
+    """Raised when the ACI StandardCores quota is exhausted."""
+
+
 def _env(name: str, default: str | None = None, required: bool = False) -> str:
     value = os.getenv(name, default)
     if required and (value is None or str(value).strip() == ""):
@@ -444,8 +448,16 @@ def _create_runner(workflow_job_id: str = "") -> str:
     try:
         _arm_request("PUT", path, body)
     except requests.HTTPError as exc:
-        if exc.response is not None and exc.response.status_code == 409:
-            logging.info("Runner %s already exists (409 conflict); treating as idempotent", runner_name)
+        if exc.response is not None:
+            if exc.response.status_code == 409:
+                logging.info("Runner %s already exists (409 conflict); treating as idempotent", runner_name)
+            else:
+                err_code = (exc.response.json().get("error") or {}).get("code", "")
+                if err_code == "ContainerGroupQuotaReached":
+                    raise _QuotaExceededError(
+                        f"ACI StandardCores quota exhausted; runner {runner_name} cannot be created"
+                    ) from exc
+                raise
         else:
             raise
     logging.info("Created runner %s", runner_name)
@@ -495,7 +507,19 @@ def _scale_once(scale_hint: int = 0, workflow_job_id: str = "") -> dict[str, Any
         )
 
     while current < desired:
-        _create_runner(workflow_job_id=workflow_job_id if created == 0 else "")
+        for quota_attempt in range(3):
+            try:
+                _create_runner(workflow_job_id=workflow_job_id if created == 0 else "")
+                break
+            except _QuotaExceededError:
+                if quota_attempt >= 2:
+                    raise
+                wait = 35
+                logging.warning(
+                    "ACI quota exhausted for job %s; sleeping %ds then retrying (%d/2)",
+                    workflow_job_id, wait, quota_attempt + 1,
+                )
+                time.sleep(wait)
         current += 1
         created += 1
 
@@ -586,7 +610,7 @@ def scale_worker(message: func.ServiceBusMessage) -> None:
 
 @app.timer_trigger(
     arg_name="timer",
-    schedule="0 */5 * * * *",
+    schedule="0 * * * * *",
     run_on_startup=False,
     use_monitor=True,
 )
