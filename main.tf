@@ -232,13 +232,6 @@ resource "azurerm_linux_function_app" "scaler" {
         priority   = 100 + ip_restriction.key
       }
     }
-
-    ip_restriction {
-      name        = "azure-load-balancer"
-      service_tag = "AzureLoadBalancer"
-      action      = "Allow"
-      priority    = 200
-    }
   }
 
   app_settings = merge(
