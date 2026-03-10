@@ -18,9 +18,9 @@ locals {
 
   scaler_base_settings = {
     FUNCTIONS_WORKER_RUNTIME                 = "python"
-    SERVICEBUS_QUEUE_NAME        = var.servicebus_queue_name
-    SERVICEBUS_NAMESPACE_FQDN    = "${azurerm_servicebus_namespace.scaler.name}.servicebus.windows.net"
-    SERVICEBUS_CONNECTION_STRING = azurerm_servicebus_namespace_authorization_rule.scaler.primary_connection_string
+    SERVICEBUS_QUEUE_NAME                          = var.servicebus_queue_name
+    SERVICEBUS_NAMESPACE_FQDN                      = "${azurerm_servicebus_namespace.scaler.name}.servicebus.windows.net"
+    SERVICEBUS_CONNECTION__fullyQualifiedNamespace = "${azurerm_servicebus_namespace.scaler.name}.servicebus.windows.net"
 
     RUNNER_RESOURCE_GROUP    = var.resource_group_name
     RUNNER_NAME_PREFIX       = var.aci_name
@@ -107,6 +107,8 @@ resource "azurerm_servicebus_namespace" "scaler" {
   location            = var.location
   resource_group_name = var.resource_group_name
   sku                 = "Basic"
+  minimum_tls_version = "1.2"
+  local_auth_enabled  = false
 
   tags = var.tags
 }
@@ -120,13 +122,10 @@ resource "azurerm_servicebus_queue" "scale_requests" {
   default_message_ttl = "P14D"
 }
 
-resource "azurerm_servicebus_namespace_authorization_rule" "scaler" {
-  name         = "scaler-function"
-  namespace_id = azurerm_servicebus_namespace.scaler.id
-
-  listen = true
-  send   = true
-  manage = false
+resource "azurerm_role_assignment" "scaler_servicebus_owner" {
+  scope                = azurerm_servicebus_namespace.scaler.id
+  role_definition_name = "Azure Service Bus Data Owner"
+  principal_id         = azurerm_linux_function_app.scaler.identity[0].principal_id
 }
 
 # ==============================================================================

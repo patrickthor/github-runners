@@ -64,11 +64,12 @@ def _verify_github_signature(raw: bytes, secret: str, signature_header: str | No
 
 def _servicebus_send(payload: dict[str, Any]) -> None:
     from azure.servicebus import ServiceBusClient, ServiceBusMessage
+    from azure.identity import DefaultAzureCredential
 
-    conn = _env("SERVICEBUS_CONNECTION_STRING", required=True)
+    fqdn = _env("SERVICEBUS_NAMESPACE_FQDN", required=True)
     queue_name = _env("SERVICEBUS_QUEUE_NAME", required=True)
 
-    with ServiceBusClient.from_connection_string(conn) as client:
+    with ServiceBusClient(fully_qualified_namespace=fqdn, credential=DefaultAzureCredential()) as client:
         sender = client.get_queue_sender(queue_name=queue_name)
         with sender:
             sender.send_messages(ServiceBusMessage(json.dumps(payload)))
@@ -550,7 +551,7 @@ def github_webhook(req: func.HttpRequest) -> func.HttpResponse:
 @app.service_bus_queue_trigger(
     arg_name="message",
     queue_name="%SERVICEBUS_QUEUE_NAME%",
-    connection="SERVICEBUS_CONNECTION_STRING",
+    connection="SERVICEBUS_CONNECTION",
 )
 def scale_worker(message: func.ServiceBusMessage) -> None:
     try:
