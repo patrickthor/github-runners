@@ -20,8 +20,43 @@ Azure Function App (scale_worker)
 Azure Container Instances  ──►  ACR (actions-runner image)
      │
      ▼
-Azure Function App (cleanup_timer)  [runs every 5 min]
+Azure Function App (cleanup_timer)  [runs every 1 min]
      │  removes stale / completed runners
+```
+
+## Usage
+
+As a Terraform module (recommended for external consumers):
+
+```hcl
+module "runners" {
+  source = "github.com/patrickthor/github-runners//modules/runners?ref=v1.0.0"
+
+  workload    = "runner"
+  environment = "prod"
+  instance    = "001"
+  location    = "westeurope"
+
+  github_org  = "your-org"
+  github_repo = "your-org/your-repo"
+
+  github_app_id_secret_name              = "github-app-id"
+  github_app_installation_id_secret_name = "github-app-installation-id"
+  github_app_private_key_secret_name     = "github-app-private-key"
+}
+```
+
+## Project structure
+
+```
+├── modules/runners/     # Reusable Terraform module (all resources)
+├── scaler-function/     # Python Function App code (deployed separately)
+├── bootstrap/           # One-time state storage provisioning
+├── examples/demo/       # Demo workflow using self-hosted runners
+├── main.tf              # Root wrapper (calls modules/runners)
+├── variables.tf         # Root variables (passed through to module)
+├── outputs.tf           # Root outputs (passed through from module)
+└── .github/workflows/   # CI/CD pipelines
 ```
 
 **Provisioned resources**
@@ -46,9 +81,8 @@ Azure Function App (cleanup_timer)  [runs every 5 min]
 
 ## Prerequisites
 
-- [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.0
+- [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.5
 - [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli) (logged in: `az login`)
-- [Azure Functions Core Tools v4](https://learn.microsoft.com/en-us/azure/azure-functions/functions-run-local) (`npm i -g azure-functions-core-tools@4`)
 - A GitHub App with `Administration: Read and write` + `Actions: Read` repository permissions
 
 
@@ -158,18 +192,14 @@ In your repository go to **Settings → Secrets and variables → Actions**.
 
 | Variable | Example value |
 |---|---|
-| `AZURE_RESOURCE_GROUP` | `rg-runner-poc-bvt` |
+| `WORKLOAD` | `runner` |
+| `ENVIRONMENT` | `poc` |
+| `INSTANCE` | `bvt` |
 | `AZURE_LOCATION` | `westeurope` |
-| `ACR_NAME` | `crrunnerpocbvt` |
-| `ACI_NAME` | `ci-runner-poc-bvt` |
-| `KEY_VAULT_NAME` | `kv-runner-poc-bvt` |
-| `STATE_STORAGE_ACCOUNT_NAME` | `strunnerpocbvt` |
-| `STATE_CONTAINER_NAME` | `tfstate` |
-| `FUNCTION_STORAGE_ACCOUNT_NAME` | `stfnrunnerpocbvt` |
-| `FUNCTION_APP_NAME` | `func-runner-poc-bvt` |
-| `SERVICEBUS_NAMESPACE_NAME` | `sbns-runner-poc-bvt` |
 | `GH_ORG` | `your-org` |
 | `GH_REPO` | `your-org/your-repo` |
+| `STATE_STORAGE_ACCOUNT_NAME` | *(optional — auto-derived as `st{workload}{environment}{instance}`)* |
+| `STATE_CONTAINER_NAME` | `tfstate` |
 | `RUNNER_WORKLOAD_ROLES` | *(empty — explicitly grant what runners need, comma-separated)* |
 | `CREATE_RESOURCE_GROUP` | `true` *(set to `false` if RG already exists)* |
 | `ENABLE_RESOURCE_LOCKS` | `false` *(set to `true` in production)* |
@@ -294,21 +324,31 @@ git push
 
 | Variable | Description |
 |---|---|
-| `resource_group_name` | Azure resource group |
+| `workload` | Short workload identifier (e.g. `runner`) — used to generate all resource names |
+| `environment` | Environment identifier (e.g. `poc`, `dev`, `prod`) |
+| `instance` | Instance identifier for uniqueness (e.g. `bvt`, `001`) |
 | `location` | Azure region (e.g. `westeurope`) |
 | `subscription_id` | Azure subscription ID |
-| `acr_name` | Container Registry name — alphanumeric only, globally unique |
-| `aci_name` | ACI runner name prefix; seeds `id-`, `asp-`, `appi-` names |
-| `key_vault_name` | Key Vault name — globally unique |
-| `storage_account_name` | State storage account name (provisioned by bootstrap) |
-| `function_storage_account_name` | Function App runtime storage — alphanumeric only, globally unique |
-| `function_app_name` | Function App name — globally unique |
-| `servicebus_namespace_name` | Service Bus namespace name — globally unique |
 | `github_org` | GitHub organisation name |
 | `github_repo` | Repository in `org/repo` format |
 | `github_app_id_secret_name` | Key Vault secret name for GitHub App ID |
 | `github_app_installation_id_secret_name` | Key Vault secret name for installation ID |
 | `github_app_private_key_secret_name` | Key Vault secret name for private key PEM |
+
+### Resource Name Overrides
+
+All resource names are auto-generated from `workload`/`environment`/`instance` using Azure CAF conventions. Override any name by setting the corresponding variable:
+
+| Variable | Default pattern | Example (`runner`/`poc`/`bvt`) |
+|---|---|---|
+| `resource_group_name` | `rg-{w}-{e}-{i}` | `rg-runner-poc-bvt` |
+| `acr_name` | `cr{w}{e}{i}` | `crrunnerpocbvt` |
+| `aci_name` | `ci-{w}-{e}-{i}` | `ci-runner-poc-bvt` |
+| `key_vault_name` | `kv-{w}-{e}-{i}` | `kv-runner-poc-bvt` |
+| `storage_account_name` | `st{w}{e}{i}` | `strunnerpocbvt` |
+| `function_app_name` | `func-{w}-{e}-{i}` | `func-runner-poc-bvt` |
+| `function_storage_account_name` | `stfn{w}{e}{i}` | `stfnrunnerpocbvt` |
+| `servicebus_namespace_name` | `sbns-{w}-{e}-{i}` | `sbns-runner-poc-bvt` |
 
 ### Optional
 

@@ -1,74 +1,78 @@
 # ==============================================================================
-# Root outputs — pass through from module
+# Outputs
 # ==============================================================================
 
 output "resource_group_name" {
   description = "The resource group name (created or referenced)"
-  value       = module.runners.resource_group_name
+  value       = local.resource_group_name
 }
 
 output "acr_login_server" {
   description = "The login server URL for the Azure Container Registry"
-  value       = module.runners.acr_login_server
+  value       = azurerm_container_registry.acr.login_server
 }
 
 output "acr_id" {
   description = "The ID of the Azure Container Registry"
-  value       = module.runners.acr_id
+  value       = azurerm_container_registry.acr.id
 }
 
 output "key_vault_uri" {
   description = "The URI of the Key Vault"
-  value       = module.runners.key_vault_uri
+  value       = azurerm_key_vault.kv.vault_uri
 }
 
 output "key_vault_id" {
   description = "The ID of the Key Vault"
-  value       = module.runners.key_vault_id
+  value       = azurerm_key_vault.kv.id
 }
 
 output "storage_account_id" {
   description = "The ID of the Terraform-state storage account (managed by bootstrap)"
-  value       = module.runners.storage_account_id
+  value       = data.azurerm_storage_account.state.id
 }
 
 output "function_app_name" {
   description = "Event-driven scaler Function App name"
-  value       = module.runners.function_app_name
+  value       = azurerm_linux_function_app.scaler.name
 }
 
 output "function_app_default_hostname" {
   description = "Default hostname of scaler Function App"
-  value       = module.runners.function_app_default_hostname
+  value       = azurerm_linux_function_app.scaler.default_hostname
 }
 
 output "servicebus_namespace_name" {
   description = "Service Bus namespace name used for scale events"
-  value       = module.runners.servicebus_namespace_name
+  value       = azurerm_servicebus_namespace.scaler.name
 }
 
 output "servicebus_queue_name" {
   description = "Service Bus queue name used for scale requests"
-  value       = module.runners.servicebus_queue_name
+  value       = azurerm_servicebus_queue.scale_requests.name
 }
 
 output "runner_pull_identity" {
   description = "User-assigned identity used by ACI runners for ACR pull"
-  value       = module.runners.runner_pull_identity
+  value = {
+    id           = azurerm_user_assigned_identity.runner_pull.id
+    client_id    = azurerm_user_assigned_identity.runner_pull.client_id
+    principal_id = azurerm_user_assigned_identity.runner_pull.principal_id
+  }
 }
 
 output "scaler_identity_principal_id" {
   description = "System-assigned principal ID for scaler Function App"
-  value       = module.runners.scaler_identity_principal_id
+  value       = azurerm_linux_function_app.scaler.identity[0].principal_id
 }
 
 output "log_analytics_workspace_id" {
   description = "Log Analytics workspace ID used for diagnostics"
-  value       = module.runners.log_analytics_workspace_id
+  value       = local.log_analytics_workspace_id
 }
 
 output "application_insights_connection_string" {
   description = "Application Insights connection string"
-  value       = module.runners.application_insights_connection_string
+  value       = azurerm_application_insights.scaler.connection_string
   sensitive   = true
 }

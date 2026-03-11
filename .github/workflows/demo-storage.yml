@@ -22,7 +22,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: demo
+        working-directory: examples/demo
 
     env:
       ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}

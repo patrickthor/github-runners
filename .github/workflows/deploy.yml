@@ -12,16 +12,12 @@
 #     AZURE_SUBSCRIPTION_ID — Target subscription ID
 #
 #   Variables (non-sensitive):
-#     AZURE_RESOURCE_GROUP             — e.g. rg-runner-poc-bvt
+#     WORKLOAD                         — e.g. runner
+#     ENVIRONMENT                      — e.g. poc
+#     INSTANCE                         — e.g. bvt
 #     AZURE_LOCATION                   — e.g. westeurope
-#     ACR_NAME                         — e.g. crrunnerpocbvt
-#     ACI_NAME                         — e.g. ci-runner-poc-bvt
-#     KEY_VAULT_NAME                   — e.g. kv-runner-poc-bvt
-#     STATE_STORAGE_ACCOUNT_NAME       — e.g. strunnerpocbvt
+#     STATE_STORAGE_ACCOUNT_NAME       — e.g. strunnerpocbvt (override if differs from convention)
 #     STATE_CONTAINER_NAME             — e.g. tfstate
-#     FUNCTION_STORAGE_ACCOUNT_NAME    — e.g. stfnrunnerpocbvt
-#     FUNCTION_APP_NAME                — e.g. func-runner-poc-bvt
-#     SERVICEBUS_NAMESPACE_NAME        — e.g. sbns-runner-poc-bvt
 #     GH_ORG                           — e.g. patrickthor
 #     GH_REPO                          — e.g. patrickthor/github-runners
 # ==============================================================================
@@ -54,7 +50,7 @@ jobs:
 
     outputs:
       function_app_name:  ${{ steps.tf-output.outputs.function_app_name }}
-      resource_group:     ${{ vars.AZURE_RESOURCE_GROUP }}
+      resource_group:     ${{ steps.tf-output.outputs.resource_group_name }}
 
     steps:
       - name: Checkout
@@ -75,13 +71,18 @@ jobs:
 
       - name: Generate backend.hcl
         env:
-          RG:      ${{ vars.AZURE_RESOURCE_GROUP }}
-          STORAGE: ${{ vars.STATE_STORAGE_ACCOUNT_NAME }}
-          CONTAINER: ${{ vars.STATE_CONTAINER_NAME || 'tfstate' }}
+          WORKLOAD:    ${{ vars.WORKLOAD }}
+          ENVIRONMENT: ${{ vars.ENVIRONMENT }}
+          INSTANCE:    ${{ vars.INSTANCE }}
+          STORAGE:     ${{ vars.STATE_STORAGE_ACCOUNT_NAME || '' }}
+          CONTAINER:   ${{ vars.STATE_CONTAINER_NAME || 'tfstate' }}
         run: |
+          # Use override if set, otherwise derive from naming convention
+          STORAGE_NAME="${STORAGE:-st${WORKLOAD}${ENVIRONMENT}${INSTANCE}}"
+          RG_NAME="rg-${WORKLOAD}-${ENVIRONMENT}-${INSTANCE}"
           cat > backend.hcl <<EOF
-          resource_group_name  = "$RG"
-          storage_account_name = "$STORAGE"
+          resource_group_name  = "$RG_NAME"
+          storage_account_name = "$STORAGE_NAME"
           container_name       = "$CONTAINER"
           key                  = "github-runners.tfstate"
           use_azuread_auth     = true
@@ -89,18 +90,13 @@ jobs:
 
       - name: Generate terraform.tfvars
         env:
-          RG:              ${{ vars.AZURE_RESOURCE_GROUP }}
-          LOCATION:        ${{ vars.AZURE_LOCATION }}
-          SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          ACR_NAME:        ${{ vars.ACR_NAME }}
-          ACI_NAME:        ${{ vars.ACI_NAME }}
-          KV_NAME:         ${{ vars.KEY_VAULT_NAME }}
-          STATE_ST:        ${{ vars.STATE_STORAGE_ACCOUNT_NAME }}
-          FUNC_ST:         ${{ vars.FUNCTION_STORAGE_ACCOUNT_NAME }}
-          FUNC_APP:        ${{ vars.FUNCTION_APP_NAME }}
-          SBNS:            ${{ vars.SERVICEBUS_NAMESPACE_NAME }}
-          GH_ORG:          ${{ vars.GH_ORG }}
-          GH_REPO:         ${{ vars.GH_REPO }}
+          WORKLOAD:               ${{ vars.WORKLOAD }}
+          ENVIRONMENT:            ${{ vars.ENVIRONMENT }}
+          INSTANCE:               ${{ vars.INSTANCE }}
+          LOCATION:               ${{ vars.AZURE_LOCATION }}
+          SUBSCRIPTION_ID:        ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          GH_ORG:                 ${{ vars.GH_ORG }}
+          GH_REPO:                ${{ vars.GH_REPO }}
           GH_APP_ID_SECRET:       ${{ vars.GITHUB_APP_ID_SECRET_NAME || 'github-app-id' }}
           GH_APP_INST_SECRET:     ${{ vars.GITHUB_APP_INSTALLATION_ID_SECRET_NAME || 'github-app-installation-id' }}
           GH_APP_KEY_SECRET:      ${{ vars.GITHUB_APP_PRIVATE_KEY_SECRET_NAME || 'github-app-private-key' }}
@@ -110,24 +106,19 @@ jobs:
         run: |
           ROLES_TF=$(echo "$RUNNER_WORKLOAD_ROLES" | python3 -c "import sys,json; roles=[r.strip() for r in sys.stdin.read().strip().split(',') if r.strip()]; print(json.dumps(roles))")
           cat > terraform.tfvars <<EOF
-          resource_group_name           = "$RG"
-          location                      = "$LOCATION"
-          subscription_id               = "$SUBSCRIPTION_ID"
-          acr_name                      = "$ACR_NAME"
-          aci_name                      = "$ACI_NAME"
-          key_vault_name                = "$KV_NAME"
-          storage_account_name          = "$STATE_ST"
-          function_storage_account_name = "$FUNC_ST"
-          function_app_name             = "$FUNC_APP"
-          servicebus_namespace_name     = "$SBNS"
-          github_org                    = "$GH_ORG"
-          github_repo                   = "$GH_REPO"
+          workload        = "$WORKLOAD"
+          environment     = "$ENVIRONMENT"
+          instance        = "$INSTANCE"
+          location        = "$LOCATION"
+          subscription_id = "$SUBSCRIPTION_ID"
+          github_org      = "$GH_ORG"
+          github_repo     = "$GH_REPO"
           github_app_id_secret_name              = "$GH_APP_ID_SECRET"
           github_app_installation_id_secret_name = "$GH_APP_INST_SECRET"
           github_app_private_key_secret_name     = "$GH_APP_KEY_SECRET"
-          runner_workload_roles         = $ROLES_TF
-          create_resource_group         = $CREATE_RG
-          enable_resource_locks         = $ENABLE_LOCKS
+          runner_workload_roles = $ROLES_TF
+          create_resource_group = $CREATE_RG
+          enable_resource_locks = $ENABLE_LOCKS
           EOF
 
       - name: Terraform init
@@ -144,8 +135,11 @@ jobs:
 
       - name: Import runner image into ACR
         env:
-          ACR_NAME: ${{ vars.ACR_NAME }}
+          WORKLOAD:    ${{ vars.WORKLOAD }}
+          ENVIRONMENT: ${{ vars.ENVIRONMENT }}
+          INSTANCE:    ${{ vars.INSTANCE }}
         run: |
+          ACR_NAME="cr${WORKLOAD}${ENVIRONMENT}${INSTANCE}"
           az acr import \
             --name "$ACR_NAME" \
             --source ghcr.io/myoung34/docker-github-actions-runner:latest \
@@ -156,6 +150,7 @@ jobs:
         id: tf-output
         run: |
           echo "function_app_name=$(terraform output -raw function_app_name)" >> "$GITHUB_OUTPUT"
+          echo "resource_group_name=$(terraform output -raw resource_group_name)" >> "$GITHUB_OUTPUT"
 
   # ----------------------------------------------------------------------------
   # Stage 3 — Function App code

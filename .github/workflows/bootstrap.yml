@@ -16,9 +16,11 @@
 #     AZURE_SUBSCRIPTION_ID — Target subscription ID
 #
 #   Variables:
-#     AZURE_RESOURCE_GROUP         — e.g. rg-runner-poc-bvt
+#     WORKLOAD                     — e.g. runner
+#     ENVIRONMENT                  — e.g. poc
+#     INSTANCE                     — e.g. bvt
 #     AZURE_LOCATION               — e.g. westeurope
-#     STATE_STORAGE_ACCOUNT_NAME   — e.g. strunnerpocbvt
+#     STATE_STORAGE_ACCOUNT_NAME   — e.g. strunnerpocbvt  (optional, auto-derived)
 #     STATE_CONTAINER_NAME         — e.g. tfstate  (optional, defaults below)
 # ==============================================================================
 
@@ -63,18 +65,22 @@ jobs:
 
       - name: Generate bootstrap tfvars
         env:
-          RESOURCE_GROUP:  ${{ vars.AZURE_RESOURCE_GROUP }}
+          WORKLOAD:        ${{ vars.WORKLOAD }}
+          ENVIRONMENT:     ${{ vars.ENVIRONMENT }}
+          INSTANCE:        ${{ vars.INSTANCE }}
           LOCATION:        ${{ vars.AZURE_LOCATION }}
           SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          STORAGE_ACCOUNT: ${{ vars.STATE_STORAGE_ACCOUNT_NAME }}
+          STORAGE_ACCOUNT: ${{ vars.STATE_STORAGE_ACCOUNT_NAME || '' }}
           CONTAINER:       ${{ vars.STATE_CONTAINER_NAME || 'tfstate' }}
           SKIP_CREATE:     ${{ inputs.skip_create }}
         run: |
+          RESOURCE_GROUP="rg-${WORKLOAD}-${ENVIRONMENT}-${INSTANCE}"
+          STORAGE_NAME="${STORAGE_ACCOUNT:-st${WORKLOAD}${ENVIRONMENT}${INSTANCE}}"
           cat > terraform.tfvars <<EOF
           resource_group_name        = "$RESOURCE_GROUP"
           location                   = "$LOCATION"
           subscription_id            = "$SUBSCRIPTION_ID"
-          state_storage_account_name = "$STORAGE_ACCOUNT"
+          state_storage_account_name = "$STORAGE_NAME"
           state_container_name       = "$CONTAINER"
           use_existing_storage       = $SKIP_CREATE
           EOF
@@ -86,15 +92,17 @@ jobs:
         run: terraform apply -auto-approve -input=false
 
       - name: Grant CI identity Storage Blob Data Contributor on state storage
-        # Required so the Deploy workflow can authenticate to the remote backend
-        # using AAD (use_azuread_auth = true in providers.tf).
         env:
-          CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          STORAGE:   ${{ vars.STATE_STORAGE_ACCOUNT_NAME }}
-          RG:        ${{ vars.AZURE_RESOURCE_GROUP }}
+          CLIENT_ID:   ${{ secrets.AZURE_CLIENT_ID }}
+          WORKLOAD:    ${{ vars.WORKLOAD }}
+          ENVIRONMENT: ${{ vars.ENVIRONMENT }}
+          INSTANCE:    ${{ vars.INSTANCE }}
+          STORAGE:     ${{ vars.STATE_STORAGE_ACCOUNT_NAME || '' }}
         run: |
+          RG="rg-${WORKLOAD}-${ENVIRONMENT}-${INSTANCE}"
+          STORAGE_NAME="${STORAGE:-st${WORKLOAD}${ENVIRONMENT}${INSTANCE}}"
           PRINCIPAL_ID=$(az ad sp show --id "$CLIENT_ID" --query id -o tsv)
-          STORAGE_ID=$(az storage account show --name "$STORAGE" --resource-group "$RG" --query id -o tsv)
+          STORAGE_ID=$(az storage account show --name "$STORAGE_NAME" --resource-group "$RG" --query id -o tsv)
           if az role assignment list --assignee "$PRINCIPAL_ID" --scope "$STORAGE_ID" \
                --query "[?roleDefinitionName=='Storage Blob Data Contributor']" -o tsv | grep -q .; then
             echo "Role already assigned — skipping."
