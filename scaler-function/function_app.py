@@ -40,6 +40,10 @@ class _QuotaExceededError(Exception):
     """Raised when the ACI StandardCores quota is exhausted."""
 
 
+class _AtCapacityError(Exception):
+    """Raised when all runner slots are at max_instances; caller should defer the job."""
+
+
 def _env(name: str, default: str | None = None, required: bool = False) -> str:
     value = os.getenv(name, default)
     if required and (value is None or str(value).strip() == ""):
@@ -67,17 +71,23 @@ def _verify_github_signature(raw: bytes, secret: str, signature_header: str | No
     return hmac.compare_digest(expected, signature_header)
 
 
-def _servicebus_send(payload: dict[str, Any]) -> None:
+def _servicebus_send(payload: dict[str, Any], delay_seconds: int = 0) -> None:
     from azure.servicebus import ServiceBusClient, ServiceBusMessage
     from azure.identity import DefaultAzureCredential
 
     fqdn = _env("SERVICEBUS_NAMESPACE_FQDN", required=True)
     queue_name = _env("SERVICEBUS_QUEUE_NAME", required=True)
 
+    msg = ServiceBusMessage(json.dumps(payload))
+    if delay_seconds > 0:
+        msg.scheduled_enqueue_time_utc = (
+            dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=delay_seconds)
+        )
+
     with ServiceBusClient(fully_qualified_namespace=fqdn, credential=DefaultAzureCredential()) as client:
         sender = client.get_queue_sender(queue_name=queue_name)
         with sender:
-            sender.send_messages(ServiceBusMessage(json.dumps(payload)))
+            sender.send_messages(msg)
 
 
 def _arm_token() -> str:
@@ -499,11 +509,8 @@ def _scale_once(scale_hint: int = 0, workflow_job_id: str = "") -> dict[str, Any
     deleted = 0
 
     if workflow_job_id and scale_hint > 0 and current >= max_instances:
-        # At capacity — do not consume this message. Re-raise so Service Bus
-        # retries it after the lock timeout (default 30s), by which time a
-        # slot may have freed up.
-        raise RuntimeError(
-            f"At max_instances ({max_instances}); deferring job {workflow_job_id} for retry"
+        raise _AtCapacityError(
+            f"At max_instances ({max_instances}); deferring job {workflow_job_id}"
         )
 
     while current < desired:
@@ -601,8 +608,26 @@ def scale_worker(message: func.ServiceBusMessage) -> None:
             scale_hint = 1
 
         workflow_job_id = _extract_workflow_job_id(event)
-        result = _scale_once(scale_hint=scale_hint, workflow_job_id=workflow_job_id)
-        logging.info("Scale result: %s", json.dumps(result))
+        try:
+            result = _scale_once(scale_hint=scale_hint, workflow_job_id=workflow_job_id)
+            logging.info("Scale result: %s", json.dumps(result))
+        except _AtCapacityError as exc:
+            defer_count = int(event.get("_defer_count") or 0) + 1
+            max_defer = _int_env("RUNNER_MAX_DEFER_COUNT", 20)
+            if defer_count > max_defer:
+                logging.error(
+                    "Job %s deferred %d times and still at capacity; giving up",
+                    workflow_job_id, defer_count,
+                )
+                return  # complete the message; job will time out on GitHub side
+            delay = _int_env("RUNNER_CAPACITY_RETRY_DELAY_SECONDS", 45)
+            event["_defer_count"] = defer_count
+            _servicebus_send(event, delay_seconds=delay)
+            logging.warning(
+                "At capacity for job %s (defer %d/%d); re-enqueued with %ds delay: %s",
+                workflow_job_id, defer_count, max_defer, delay, exc,
+            )
+            # return normally — SB *completes* this message, delivery count not incremented
     except Exception:
         logging.exception("Scale worker failed")
         raise
