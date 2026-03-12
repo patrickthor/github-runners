@@ -94,19 +94,32 @@ def _arm_request(method: str, path: str, body: dict[str, Any] | None = None) -> 
     if not subscription_id:
         raise ValueError("AZURE_SUBSCRIPTION_ID is required (set in Function App settings)")
 
-    token = _arm_token()
     url = f"{ARM_BASE}/subscriptions/{subscription_id}{path}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-    }
 
     last_exc: Exception | None = None
     for attempt in range(4):
         try:
+            # Fetch a fresh token on each attempt so retries recover from
+            # expired tokens or transient managed-identity errors.
+            token = _arm_token()
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            }
             response = _http_session.request(method, url, headers=headers, json=body, timeout=30)
+
+            # Retry on throttling (429) and server errors (5xx)
+            if response.status_code == 429 or response.status_code >= 500:
+                retry_after = int(response.headers.get("Retry-After", 2 ** attempt))
+                logging.warning(
+                    "ARM %s %s returned %d (attempt %d/4), retrying in %ds",
+                    method, path, response.status_code, attempt + 1, retry_after,
+                )
+                time.sleep(retry_after)
+                continue
+
             if response.status_code >= 400:
-                logging.error("ARM %s %s failed: %s", method, path, response.text)
+                logging.error("ARM %s %s failed (%d): %s", method, path, response.status_code, response.text)
                 response.raise_for_status()
             return response
         except (requests.ConnectionError, requests.Timeout) as exc:
@@ -117,12 +130,28 @@ def _arm_request(method: str, path: str, body: dict[str, Any] | None = None) -> 
                 method, path, attempt + 1, wait, exc,
             )
             time.sleep(wait)
-    raise last_exc  # type: ignore[misc]
+        except requests.HTTPError:
+            raise
+        except Exception as exc:
+            # Catch managed-identity / token errors on retry
+            last_exc = exc
+            wait = 2 ** attempt
+            logging.warning(
+                "ARM %s %s unexpected error (attempt %d/4), retrying in %ds: %s",
+                method, path, attempt + 1, wait, exc,
+            )
+            time.sleep(wait)
+
+    if last_exc is not None:
+        raise last_exc
+    # If we exhausted retries on 429/5xx without an exception, raise the last response
+    raise requests.HTTPError(f"ARM {method} {path} failed after 4 retries", response=response)  # type: ignore[possibly-undefined]
 
 
 def _list_runners() -> list[dict[str, Any]]:
     rg = _env("RUNNER_RESOURCE_GROUP", required=True)
     prefix = _env("RUNNER_NAME_PREFIX", required=True)
+    logging.info("Listing runners in rg=%s with prefix=%s", rg, prefix)
     path = f"/resourceGroups/{rg}/providers/Microsoft.ContainerInstance/containerGroups?api-version={ARM_API_VERSION}"
     response = _arm_request("GET", path)
     items = [
@@ -296,7 +325,15 @@ def _normalize_private_key(raw_key: str) -> str:
 def _github_installation_access_token() -> str:
     app_id = _env("GITHUB_APP_ID", required=True)
     installation_id = _env("GITHUB_APP_INSTALLATION_ID", required=True)
-    private_key = _normalize_private_key(_env("GITHUB_APP_PRIVATE_KEY", required=True))
+    private_key_raw = _env("GITHUB_APP_PRIVATE_KEY", required=True)
+
+    logging.info(
+        "GitHub App auth: app_id=%s, installation_id=%s, key_length=%d, key_starts=%s",
+        app_id, installation_id, len(private_key_raw),
+        private_key_raw[:30].replace("\n", "\\n") if private_key_raw else "(empty)",
+    )
+
+    private_key = _normalize_private_key(private_key_raw)
 
     now = _utcnow()
     cached_token = str(_installation_token_cache.get("token", ""))
@@ -395,6 +432,11 @@ def _create_runner(workflow_job_id: str = "") -> str:
 
     pull_identity_client_id = _env("RUNNER_PULL_IDENTITY_CLIENT_ID", required=True)
 
+    logging.info(
+        "Creating runner: name=%s, rg=%s, location=%s, image=%s, cpu=%d, memory=%d, job=%s",
+        runner_name, rg, location, runner_image, cpu, memory, workflow_job_id,
+    )
+
     environment_variables = [
         {"name": "REPO_URL", "value": f"https://github.com/{repo}"},
         {"name": "RUNNER_NAME", "value": runner_name},
@@ -478,7 +520,13 @@ def _scale_once(scale_hint: int = 0, workflow_job_id: str = "") -> dict[str, Any
     min_instances = _int_env("RUNNER_MIN_INSTANCES", 0)
     max_instances = _int_env("RUNNER_MAX_INSTANCES", 10)
 
+    logging.info(
+        "_scale_once: hint=%d, job=%s, min=%d, max=%d",
+        scale_hint, workflow_job_id, min_instances, max_instances,
+    )
+
     runners = _list_runners()
+    logging.info("Listed %d existing runners", len(runners))
     pruned = _prune_stale_runners(runners)
     if pruned > 0:
         runners = _list_runners()
@@ -596,6 +644,7 @@ def github_webhook(req: func.HttpRequest) -> func.HttpResponse:
 def scale_worker(message: func.ServiceBusMessage) -> None:
     try:
         body = message.get_body().decode("utf-8")
+        logging.info("scale_worker received message: %s", body[:500])
         event = json.loads(body)
 
         scale_hint = 0
@@ -604,10 +653,18 @@ def scale_worker(message: func.ServiceBusMessage) -> None:
             scale_hint = 1
 
         workflow_job_id = _extract_workflow_job_id(event)
+        logging.info(
+            "scale_worker processing: action=%s, scale_hint=%d, workflow_job_id=%s",
+            action, scale_hint, workflow_job_id,
+        )
         result = _scale_once(scale_hint=scale_hint, workflow_job_id=workflow_job_id)
         logging.info("Scale result: %s", json.dumps(result))
+    except (ValueError, KeyError) as exc:
+        # Configuration errors (missing env vars, bad values) are permanent —
+        # retrying won't help. Log and let the message complete (avoid DLQ spam).
+        logging.exception("Scale worker permanent config error — message will be abandoned: %s", exc)
     except Exception:
-        logging.exception("Scale worker failed")
+        logging.exception("Scale worker failed — message will be retried")
         raise
 
 
