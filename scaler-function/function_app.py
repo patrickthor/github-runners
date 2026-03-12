@@ -243,6 +243,34 @@ def _extract_workflow_job_id(event: dict[str, Any]) -> str:
         return ""
     return str(nested).strip()
 
+def _is_job_still_queued(workflow_job_id: str) -> bool:
+    """Check GitHub API to see if a workflow job is still in 'queued' status."""
+    if not workflow_job_id:
+        return False
+    try:
+        repo = _env("GITHUB_REPO", required=True)
+        token = _github_installation_access_token()
+        url = f"{GITHUB_API_BASE}/repos/{repo}/actions/jobs/{workflow_job_id}"
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        response = _http_session.get(url, headers=headers, timeout=15)
+        if response.status_code == 404:
+            logging.info("Job %s not found (404); treating as no longer queued", workflow_job_id)
+            return False
+        if response.status_code >= 400:
+            logging.warning("GitHub jobs API returned %d for job %s; assuming still queued", response.status_code, workflow_job_id)
+            return True
+        status = response.json().get("status", "")
+        logging.info("Job %s GitHub status: %s", workflow_job_id, status)
+        return status == "queued"
+    except Exception as exc:
+        logging.warning("Failed to check job %s status: %s; assuming still queued", workflow_job_id, exc)
+        return True
+
+
 
 def _runner_name_for_workflow_job(workflow_job_id: str) -> str:
     prefix = _env("RUNNER_NAME_PREFIX", required=True)
@@ -550,12 +578,66 @@ def _scale_once(scale_hint: int = 0, workflow_job_id: str = "") -> dict[str, Any
     deleted = 0
 
     if workflow_job_id and scale_hint > 0 and current >= max_instances:
-        # At capacity — do not consume this message. Re-raise so Service Bus
-        # retries it after the lock timeout (default 30s), by which time a
-        # slot may have freed up.
-        raise RuntimeError(
-            f"At max_instances ({max_instances}); deferring job {workflow_job_id} for retry"
-        )
+        # At capacity — check if the job is still actually queued on GitHub
+        # before burning a retry attempt.
+        if _is_job_still_queued(workflow_job_id):
+            # Sleep for most of the lock duration (2 min) so Service Bus
+            # doesn't redeliver immediately. With 30 retries × ~100s sleep
+            # we get ~50 minutes of retry window instead of burning through
+            # all attempts in seconds.
+            wait_seconds = 100
+            logging.warning(
+                "At max_instances (%d); job %s still queued — sleeping %ds before retry",
+                max_instances, workflow_job_id, wait_seconds,
+            )
+            time.sleep(wait_seconds)
+            # Re-check after sleeping — a slot may have freed up
+            runners = _list_runners()
+            _prune_stale_runners(runners)
+            active_runners = [r for r in runners if _runner_state(r) not in TERMINAL_RUNNER_STATES]
+            current = len(active_runners)
+            if current < max_instances:
+                logging.info("Slot freed up after wait; creating runner for job %s", workflow_job_id)
+                for quota_attempt in range(3):
+                    try:
+                        _create_runner(workflow_job_id=workflow_job_id)
+                        break
+                    except _QuotaExceededError:
+                        if quota_attempt >= 2:
+                            raise
+                        wait = 35
+                        logging.warning(
+                            "ACI quota exhausted for job %s after wait; sleeping %ds (%d/2)",
+                            workflow_job_id, wait, quota_attempt + 1,
+                        )
+                        time.sleep(wait)
+                return {
+                    "desired": current + 1,
+                    "current": current + 1,
+                    "created": 1,
+                    "deleted": 0,
+                    "pruned": 0,
+                    "workflow_job_id": workflow_job_id,
+                }
+            raise RuntimeError(
+                f"At max_instances ({max_instances}); deferring job {workflow_job_id} for retry"
+            )
+        else:
+            # Job is no longer queued (completed, cancelled, or picked up).
+            # Consume the message silently — no point retrying.
+            logging.info(
+                "Job %s is no longer queued on GitHub; consuming message without scaling",
+                workflow_job_id,
+            )
+            return {
+                "desired": current,
+                "current": current,
+                "created": 0,
+                "deleted": 0,
+                "pruned": 0,
+                "workflow_job_id": workflow_job_id,
+                "skipped_reason": "job_no_longer_queued",
+            }
 
     while current < desired:
         for quota_attempt in range(3):
