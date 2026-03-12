@@ -155,10 +155,10 @@ jobs:
   # ----------------------------------------------------------------------------
   # Stage 3 — Function App code
   #
-  # Flex Consumption (FC1) deployment: zip the code with pre-installed deps,
-  # then upload via az functionapp deploy. We use --async to skip the
-  # post-deploy health check which fails with 403 due to IP restrictions.
-  # The SCM endpoint (used for upload) is not subject to IP restrictions.
+  # Deploys the Python scaler function using config-zip with remote build.
+  # The function app has IP restrictions that block health checks from unknown
+  # IPs. We temporarily whitelist the runner's public IP before deploying and
+  # remove it afterwards.
   # ----------------------------------------------------------------------------
   deploy:
     name: "Stage 3 — Function App code"
@@ -180,21 +180,36 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+      - name: Get runner public IP
+        id: runner-ip
+        run: |
+          RUNNER_IP=$(curl -s https://api.ipify.org)
+          echo "ip=${RUNNER_IP}" >> "$GITHUB_OUTPUT"
+          echo "Runner public IP: ${RUNNER_IP}"
+
+      - name: Whitelist runner IP on Function App
+        run: |
+          APP="${{ needs.infra.outputs.function_app_name }}"
+          RG="${{ needs.infra.outputs.resource_group }}"
+          RUNNER_IP="${{ steps.runner-ip.outputs.ip }}"
+
+          echo "Adding ${RUNNER_IP}/32 to Function App IP restrictions..."
+          az functionapp config access-restriction add \
+            --resource-group "$RG" \
+            --name "$APP" \
+            --rule-name "github-actions-deploy" \
+            --action Allow \
+            --ip-address "${RUNNER_IP}/32" \
+            --priority 50 \
+            -o none
 
       - name: Create deployment zip
         run: |
-          pip install \
-            --target .python_packages/lib/site-packages \
-            --upgrade \
-            -r requirements.txt
           zip -r ../deploy.zip . \
             -x "local.settings*.json" \
             -x "__pycache__/*" \
             -x "*.pyc" \
+            -x ".python_packages/*" \
             -x "DEPLOYMENT.md"
 
       - name: Deploy to Function App
@@ -207,13 +222,20 @@ jobs:
             --resource-group "$RG" \
             --name "$APP" \
             --src ../deploy.zip \
+            --build-remote true \
             --timeout 300
 
-          # Verify functions are registered via management API (bypasses IP restrictions)
-          echo "Verifying deployment..."
-          az functionapp function list \
+          echo "Deployment complete."
+
+      - name: Remove runner IP from Function App
+        if: always()
+        run: |
+          APP="${{ needs.infra.outputs.function_app_name }}"
+          RG="${{ needs.infra.outputs.resource_group }}"
+
+          echo "Removing temporary deploy IP restriction..."
+          az functionapp config access-restriction remove \
             --resource-group "$RG" \
             --name "$APP" \
-            -o table || true
-
-          echo "Deployment complete."
+            --rule-name "github-actions-deploy" \
+            -o none || true

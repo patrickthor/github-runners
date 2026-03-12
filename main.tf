@@ -68,6 +68,7 @@ module "runners" {
   acr_sku                      = var.acr_sku
   storage_account_replication_type = var.storage_account_replication_type
   github_webhook_ip_ranges     = var.github_webhook_ip_ranges
+  deployment_ip_ranges         = var.deployment_ip_ranges
   tags                         = var.tags
 }
 

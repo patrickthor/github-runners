@@ -368,6 +368,12 @@ variable "github_webhook_ip_ranges" {
   ]
 }
 
+variable "deployment_ip_ranges" {
+  description = "Additional CIDR ranges to allow through the Function App IP restrictions (e.g. GitHub Actions runner IPs for deployment). These are added alongside the webhook IP ranges."
+  type        = list(string)
+  default     = []
+}
+
 variable "tags" {
   description = "Common tags to apply to all resources. Merged with auto-generated tags."
   type        = map(string)

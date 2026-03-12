@@ -230,7 +230,9 @@ If the storage account already exists from a previous run, check *skip_create* �
 Push any commit to `main` — the **Deploy** workflow runs automatically:
 
 - **Stage 2 — Infrastructure**: generates `backend.hcl` and `terraform.tfvars` from your GitHub variables, runs `terraform init`, `validate`, `plan`, and `apply`.
-- **Stage 3 — Function App code**: packages `scaler-function/` as a zip and deploys via `az functionapp deploy` (One Deploy — the only deployment technology supported by Flex Consumption FC1).
+- **Stage 3 — Function App code**: packages `scaler-function/` as a zip and deploys via `az functionapp deployment source config-zip --build-remote true` (Microsoft's recommended method for Python Flex Consumption).
+
+> **IP restrictions and deployment**: The Function App restricts inbound traffic to GitHub webhook IP ranges by default. The deploy workflow automatically whitelists the GitHub Actions runner's public IP before deploying and removes it afterwards. If you deploy manually (e.g. from a local machine), the deploying machine's IP must be allowed through the Function App's IP restrictions — either temporarily via `az functionapp config access-restriction add` or permanently via the `deployment_ip_ranges` Terraform variable.
 
 ---
 
@@ -374,6 +376,8 @@ All resource names are auto-generated from `workload`/`environment`/`instance` u
 | `enable_resource_locks` | `false` | CanNotDelete locks on Key Vault and state storage |
 | `acr_sku` | `Basic` | Container Registry SKU |
 | `storage_account_replication_type` | `LRS` | State storage replication |
+| `github_webhook_ip_ranges` | GitHub webhook CIDRs | GitHub webhook CIDR ranges for IP restriction |
+| `deployment_ip_ranges` | `[]` | Additional CIDRs to allow (e.g. static deploy IPs) |
 | `tags` | `{ManagedBy, Purpose}` | Common resource tags |
 
 ---

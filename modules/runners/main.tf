@@ -301,7 +301,7 @@ resource "azurerm_function_app_flex_consumption" "scaler" {
     # Connection string only — instrumentation key is deprecated since March 2025
     application_insights_connection_string = azurerm_application_insights.scaler.connection_string
 
-    ip_restriction_default_action = length(var.github_webhook_ip_ranges) > 0 ? "Deny" : "Allow"
+    ip_restriction_default_action = length(var.github_webhook_ip_ranges) > 0 || length(var.deployment_ip_ranges) > 0 ? "Deny" : "Allow"
 
     dynamic "ip_restriction" {
       for_each = var.github_webhook_ip_ranges
@@ -310,6 +310,16 @@ resource "azurerm_function_app_flex_consumption" "scaler" {
         ip_address = ip_restriction.value
         action     = "Allow"
         priority   = 100 + ip_restriction.key
+      }
+    }
+
+    dynamic "ip_restriction" {
+      for_each = var.deployment_ip_ranges
+      content {
+        name       = "deploy-${ip_restriction.key}"
+        ip_address = ip_restriction.value
+        action     = "Allow"
+        priority   = 200 + ip_restriction.key
       }
     }
   }
