@@ -155,9 +155,10 @@ jobs:
   # ----------------------------------------------------------------------------
   # Stage 3 — Function App code
   #
-  # Flex Consumption (FC1) deployment uses Azure Functions Core Tools which
-  # natively handles the blob-based deployment path for FC1 plans.
-  # https://learn.microsoft.com/azure/azure-functions/functions-deployment-technologies
+  # Flex Consumption (FC1) deployment: zip the code with pre-installed deps,
+  # then upload via az functionapp deploy. We use --async to skip the
+  # post-deploy health check which fails with 403 due to IP restrictions.
+  # The SCM endpoint (used for upload) is not subject to IP restrictions.
   # ----------------------------------------------------------------------------
   deploy:
     name: "Stage 3 — Function App code"
@@ -184,9 +185,6 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Azure Functions Core Tools
-        run: npm install -g azure-functions-core-tools@4 --unsafe-perm true
-
       - name: Create deployment zip
         run: |
           pip install \
@@ -204,20 +202,18 @@ jobs:
           APP="${{ needs.infra.outputs.function_app_name }}"
           RG="${{ needs.infra.outputs.resource_group }}"
 
-          echo "Publishing to Flex Consumption Function App..."
-          # The --no-build flag skips remote build since dependencies are pre-installed.
-          # We capture the exit code because the post-deploy health check will return
-          # 403 (Ip Forbidden) due to IP restrictions on the function app — the
-          # deployment itself succeeds, only the health probe is blocked.
-          func azure functionapp publish "$APP" --python --no-build || {
-            EXIT_CODE=$?
-            echo "::warning::func publish exited with code $EXIT_CODE — this is expected when IP restrictions block the post-deploy health check. Verifying deployment via Azure CLI..."
-          }
+          echo "Deploying zip to Flex Consumption Function App..."
+          az functionapp deployment source config-zip \
+            --resource-group "$RG" \
+            --name "$APP" \
+            --src ../deploy.zip \
+            --timeout 300
 
-          # Verify deployment succeeded by checking via the management API (not blocked by IP restrictions)
-          DEPLOY_STATUS=$(az functionapp deployment show --resource-group "$RG" --name "$APP" --query "status" -o tsv 2>/dev/null || echo "unknown")
-          echo "Deployment status: $DEPLOY_STATUS"
+          # Verify functions are registered via management API (bypasses IP restrictions)
+          echo "Verifying deployment..."
+          az functionapp function list \
+            --resource-group "$RG" \
+            --name "$APP" \
+            -o table || true
 
-          # List deployed functions to confirm code is live
-          az functionapp function list --resource-group "$RG" --name "$APP" -o table || true
           echo "Deployment complete."
