@@ -41,14 +41,29 @@ jobs:
           terraform_wrapper: false
 
       - name: Terraform Init
-        run: terraform init
+        run: |
+          for i in 1 2 3; do
+            terraform init && break
+            echo "Attempt $i failed — retrying in 30s..."
+            sleep 30
+          done
 
       - name: Terraform Validate
         run: terraform validate
 
       - name: Terraform Plan
-        run: terraform plan -out=tfplan
+        run: |
+          for i in 1 2 3; do
+            terraform plan -out=tfplan && break
+            echo "Attempt $i failed — retrying in 30s..."
+            sleep 30
+          done
 
       - name: Terraform Apply
         if: github.event_name == 'workflow_dispatch' && inputs.apply == true
-        run: terraform apply -auto-approve tfplan
+        run: |
+          for i in 1 2 3; do
+            terraform apply -auto-approve tfplan && break
+            echo "Attempt $i failed — retrying in 30s..."
+            sleep 30
+          done
