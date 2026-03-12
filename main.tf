@@ -79,17 +79,6 @@ module "runners" {
 # Safe to remove after all environments have applied once with these blocks.
 # ==============================================================================
 
-# Role assignment renames (from earlier refactor)
-moved {
-  from = azurerm_role_assignment.runner_pull
-  to   = module.runners.azurerm_role_assignment.runner_acr_pull
-}
-
-moved {
-  from = azurerm_role_assignment.runner_pull_workload
-  to   = module.runners.azurerm_role_assignment.runner_workload
-}
-
 # Resource group
 moved {
   from = azurerm_resource_group.this
@@ -131,7 +120,7 @@ moved {
   to   = module.runners.azurerm_user_assigned_identity.runner_pull
 }
 
-# Role assignments (already renamed)
+# Role assignments
 moved {
   from = azurerm_role_assignment.runner_acr_pull
   to   = module.runners.azurerm_role_assignment.runner_acr_pull
