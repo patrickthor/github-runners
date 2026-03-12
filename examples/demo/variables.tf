@@ -1,6 +1,7 @@
 variable "subscription_id" {
-  description = "Azure subscription ID where resources will be deployed"
+  description = "Azure subscription ID where resources will be deployed. Defaults to ARM_SUBSCRIPTION_ID environment variable."
   type        = string
+  default     = ""
 }
 
 variable "resource_group_name" {
