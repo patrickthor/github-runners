@@ -155,9 +155,9 @@ jobs:
   # ----------------------------------------------------------------------------
   # Stage 3 — Function App code
   #
-  # Flex Consumption (FC1) does NOT support Kudu zipdeploy. It requires
-  # "One Deploy" technology. We use `az functionapp deploy` which auto-detects
-  # FC1 and deploys via the correct blob-based mechanism.
+  # Flex Consumption (FC1) uses blob-based deployment via config-zip.
+  # The platform performs a server-side build (installs requirements.txt),
+  # so we only need to zip the source code — no pre-installed packages.
   # https://learn.microsoft.com/azure/azure-functions/functions-deployment-technologies
   # ----------------------------------------------------------------------------
   deploy:
@@ -180,43 +180,24 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
       - name: Create deployment zip
         run: |
-          # Pre-install dependencies so the zip is self-contained (no server-side build).
-          pip install \
-            --target .python_packages/lib/site-packages \
-            --upgrade \
-            -r requirements.txt
           zip -r ../deploy.zip . \
             -x "local.settings*.json" \
             -x "__pycache__/*" \
-            -x "*.pyc"
+            -x "*.pyc" \
+            -x ".python_packages/*" \
+            -x "DEPLOYMENT.md"
 
-      - name: Deploy to Function App (One Deploy)
+      - name: Deploy to Function App
         run: |
           APP="${{ needs.infra.outputs.function_app_name }}"
           RG="${{ needs.infra.outputs.resource_group }}"
 
-          # Clean up legacy settings that conflict with FC1 One Deploy.
-          az functionapp config appsettings delete \
-            --resource-group "$RG" --name "$APP" \
-            --setting-names WEBSITE_RUN_FROM_PACKAGE ENABLE_ORYX_BUILD SCM_DO_BUILD_DURING_DEPLOYMENT 2>/dev/null || true
-
-          # Deploy via One Deploy (the only deployment technology FC1 supports).
-          # az functionapp deploy auto-detects Flex Consumption and uses the
-          # correct blob-storage-based deployment path.
-          echo "Deploying zip via One Deploy..."
-          az functionapp deploy \
+          echo "Deploying zip to Flex Consumption Function App..."
+          az functionapp deployment source config-zip \
             --resource-group "$RG" \
             --name "$APP" \
-            --src-path ../deploy.zip \
-            --type zip \
-            --clean true \
-            --restart true
+            --src ../deploy.zip
 
           echo "Deployment complete."
