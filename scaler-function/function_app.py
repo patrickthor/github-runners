@@ -15,6 +15,8 @@ from typing import Any
 import azure.functions as func
 import jwt
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from azure.identity import DefaultAzureCredential
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION)
@@ -23,8 +25,19 @@ ARM_API_VERSION = "2023-05-01"
 ARM_BASE = "https://management.azure.com"
 GITHUB_API_BASE = "https://api.github.com"
 
-# Module-level session for TCP connection pooling across ARM and GitHub API calls
+# Module-level session with automatic retries for transport-level errors
+# (connection resets, DNS failures, etc.). Application-level retries
+# (429, 5xx, token refresh) are still handled in _arm_request.
+_retry_strategy = Retry(
+    total=3,
+    backoff_factor=1,
+    status_forcelist=[],  # Don't retry on status codes here — _arm_request handles those
+    allowed_methods=None,  # Retry all HTTP methods
+    raise_on_status=False,
+)
 _http_session = requests.Session()
+_http_session.mount("https://", HTTPAdapter(max_retries=_retry_strategy))
+_http_session.mount("http://", HTTPAdapter(max_retries=_retry_strategy))
 
 _registration_token_cache: dict[str, Any] = {
     "token": "",
@@ -122,29 +135,22 @@ def _arm_request(method: str, path: str, body: dict[str, Any] | None = None) -> 
                 logging.error("ARM %s %s failed (%d): %s", method, path, response.status_code, response.text)
                 response.raise_for_status()
             return response
-        except (requests.ConnectionError, requests.Timeout) as exc:
-            last_exc = exc
-            wait = 2 ** attempt
-            logging.warning(
-                "ARM %s %s transient error (attempt %d/4), retrying in %ds: %s",
-                method, path, attempt + 1, wait, exc,
-            )
-            time.sleep(wait)
         except requests.HTTPError:
             raise
         except Exception as exc:
-            # Catch managed-identity / token errors on retry
+            # Catch managed-identity / token errors on retry.
+            # Transport-level errors (ConnectionError, Timeout) are handled
+            # by the urllib3 retry adapter on _http_session.
             last_exc = exc
             wait = 2 ** attempt
             logging.warning(
-                "ARM %s %s unexpected error (attempt %d/4), retrying in %ds: %s",
+                "ARM %s %s error (attempt %d/4), retrying in %ds: %s",
                 method, path, attempt + 1, wait, exc,
             )
             time.sleep(wait)
 
     if last_exc is not None:
         raise last_exc
-    # If we exhausted retries on 429/5xx without an exception, raise the last response
     raise requests.HTTPError(f"ARM {method} {path} failed after 4 retries", response=response)  # type: ignore[possibly-undefined]
 
 
@@ -257,6 +263,21 @@ def _is_job_still_queued(workflow_job_id: str) -> bool:
             "X-GitHub-Api-Version": "2022-11-28",
         }
         response = _http_session.get(url, headers=headers, timeout=15)
+
+        # Handle rate limiting — back off until reset time
+        if response.status_code == 403:
+            remaining = response.headers.get("X-RateLimit-Remaining")
+            if remaining is not None and int(remaining) == 0:
+                reset_ts = int(response.headers.get("X-RateLimit-Reset", "0"))
+                wait = max(0, reset_ts - int(time.time())) + 1
+                logging.warning(
+                    "GitHub API rate limit exhausted for job %s; reset in %ds — assuming still queued",
+                    workflow_job_id, wait,
+                )
+                return True
+            logging.warning("GitHub jobs API returned 403 for job %s; assuming still queued", workflow_job_id)
+            return True
+
         if response.status_code == 404:
             logging.info("Job %s not found (404); treating as no longer queued", workflow_job_id)
             return False

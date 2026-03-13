@@ -36,18 +36,6 @@ Verified against official Microsoft documentation and Azure Well-Architected Fra
 
 ### Python / Function App
 
-#### Add retry adapter to HTTP session
-
-**Current**: Manual retry loops in `_arm_request`.
-
-**Recommended**: Use `urllib3.util.retry.Retry` with `HTTPAdapter` for automatic retries on connection resets and transient errors. Cleaner code, handles more edge cases.
-
-#### Handle GitHub API rate limiting in `_is_job_still_queued`
-
-**Current**: No rate limit checking when calling the GitHub Jobs API during at-capacity retries.
-
-**Recommended**: Check `X-RateLimit-Remaining` header and back off gracefully to avoid 403 errors during heavy retry scenarios.
-
 #### Optimize cleanup timer for high runner counts
 
 **Current**: `cleanup_timer` calls individual GET per runner every minute. At `max_instances=200`, that's 200+ ARM calls/min.
@@ -96,6 +84,8 @@ Verified against official Microsoft documentation and Azure Well-Architected Fra
 
 ### Function App / Scaler
 - Module-level HTTP session pooling (`requests.Session()`)
+- Add `urllib3` retry adapter to HTTP session — automatic retries for transport-level errors (connection resets, DNS failures), simplifying `_arm_request`
+- GitHub API rate limit handling in `_is_job_still_queued` — checks `X-RateLimit-Remaining` header and backs off gracefully
 - Remove unused app settings — `RUNNER_IDLE_TIMEOUT_MIN` and `EVENT_POLL_INTERVAL_SEC` removed (never read by Python code)
 - Fix at-capacity DLQ spam — sleep 100s between retries, check GitHub job status before retrying, ACI quota retry with backoff
 - Update stale references — `local.settings.example.json`, `DEPLOYMENT.md`, and README now use CAF naming conventions
