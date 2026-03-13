@@ -247,19 +247,20 @@ az role assignment create \
   --role "Key Vault Secrets Officer" \
   --scope $(az keyvault show --name $KV --query id -o tsv)
 
-# Store secrets
+# Store secrets — names must match the terraform.tfvars values
+# (default: github-app-id, github-app-installation-id, github-app-private-key)
 az keyvault secret set --vault-name $KV \
-  --name runnerpocbouvet-github-app-id --value "<APP_ID>"
+  --name github-app-id --value "<APP_ID>"
 
 az keyvault secret set --vault-name $KV \
-  --name runnerpocbouvet-github-app-installation-id --value "<INSTALLATION_ID>"
+  --name github-app-installation-id --value "<INSTALLATION_ID>"
 
 az keyvault secret set --vault-name $KV \
-  --name runnerpocbouvet-github-app-private-key --file <path/to/private-key.pem>
+  --name github-app-private-key --file <path/to/private-key.pem>
 
 # Optional — webhook signature validation
 az keyvault secret set --vault-name $KV \
-  --name runnerpocbouvet-webhook-secret --value "<WEBHOOK_SECRET>"
+  --name github-webhook-secret --value "<WEBHOOK_SECRET>"
 ```
 
 Default secret names expected by this module:
@@ -426,7 +427,8 @@ The control plane (`scaler-function/function_app.py`) has three functions:
 
 Key behaviours:
 - `maxConcurrentCalls: 1` on the Service Bus trigger prevents duplicate scale operations
-- At-capacity deferral: raises `RuntimeError` so Service Bus retries after lock timeout (2 min)
+- At-capacity handling: checks GitHub API if the job is still queued, sleeps 100s between retries (giving ~50 min retry window across 30 attempts), and creates the runner immediately if a slot frees up during the wait
 - Non-terminal runner deduplication — terminated containers are not counted as active
 - HTTP session pooling for ARM and GitHub API calls
-- Identity-based storage connection (no access keys)
+- ACI quota retry — 3 attempts with 35s backoff on `ContainerGroupQuotaReached`
+- Permanent config errors (missing env vars) are consumed silently to avoid DLQ spam

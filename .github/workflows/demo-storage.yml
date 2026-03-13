@@ -42,28 +42,34 @@ jobs:
 
       - name: Terraform Init
         run: |
-          for i in 1 2 3; do
-            terraform init && break
-            echo "Attempt $i failed — retrying in 30s..."
+          for attempt in 1 2 3; do
+            terraform init && exit 0
+            echo "Attempt $attempt/3 failed — retrying in 30s..."
             sleep 30
           done
+          echo "All attempts failed"
+          exit 1
 
       - name: Terraform Validate
         run: terraform validate
 
       - name: Terraform Plan
         run: |
-          for i in 1 2 3; do
-            terraform plan -out=tfplan && break
-            echo "Attempt $i failed — retrying in 30s..."
+          for attempt in 1 2 3; do
+            terraform plan -out=tfplan && exit 0
+            echo "Attempt $attempt/3 failed — retrying in 30s..."
             sleep 30
           done
+          echo "All attempts failed"
+          exit 1
 
       - name: Terraform Apply
         if: github.event_name == 'workflow_dispatch' && inputs.apply == true
         run: |
-          for i in 1 2 3; do
-            terraform apply -auto-approve tfplan && break
-            echo "Attempt $i failed — retrying in 30s..."
+          for attempt in 1 2 3; do
+            terraform apply -auto-approve tfplan && exit 0
+            echo "Attempt $attempt/3 failed — retrying in 30s..."
             sleep 30
           done
+          echo "All attempts failed"
+          exit 1

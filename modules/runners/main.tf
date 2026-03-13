@@ -62,10 +62,8 @@ locals {
     RUNNER_MEMORY                 = tostring(var.memory)
     RUNNER_MIN_INSTANCES          = tostring(var.runner_min_instances)
     RUNNER_MAX_INSTANCES          = tostring(var.runner_max_instances)
-    RUNNER_IDLE_TIMEOUT_MIN       = tostring(var.runner_idle_timeout_minutes)
     MAX_RUNNER_RUNTIME_HOURS      = tostring(var.max_runner_runtime_hours)
     RUNNER_COMPLETED_TTL_MINUTES  = tostring(var.runner_completed_ttl_minutes)
-    EVENT_POLL_INTERVAL_SEC       = tostring(var.event_poll_interval_seconds)
     RUNNER_PULL_IDENTITY_ID        = azurerm_user_assigned_identity.runner_pull.id
     RUNNER_PULL_IDENTITY_CLIENT_ID = azurerm_user_assigned_identity.runner_pull.client_id
     AZURE_SUBSCRIPTION_ID          = data.azurerm_client_config.current.subscription_id

@@ -6,7 +6,7 @@ Use Azure Functions Core Tools (v4+). **Do not use `terraform apply` to deploy c
 
 ```bash
 cd scaler-function
-func azure functionapp publish func-runner-bvt-030226 --python --build remote
+func azure functionapp publish func-runner-poc-bvt --python --build remote
 ```
 
 The `--build remote` flag triggers an Oryx build on the SCM container (pip install, squashfs packaging). Required for Python on Linux Consumption.
@@ -51,9 +51,9 @@ The `--build remote` flag triggers an Oryx build on the SCM container (pip insta
 ## Retrieving the Webhook URL
 
 ```bash
-KEY=$(az functionapp function keys list -g pocgithubrunners -n func-runner-bvt-030226 \
+KEY=$(az functionapp function keys list -g rg-runner-poc-bvt -n func-runner-poc-bvt \
   --function-name github_webhook --query default -o tsv)
-echo "https://func-runner-bvt-030226.azurewebsites.net/api/webhook/github?code=$KEY"
+echo "https://func-runner-poc-bvt.azurewebsites.net/api/webhook/github?code=$KEY"
 ```
 
 ---
@@ -62,7 +62,7 @@ echo "https://func-runner-bvt-030226.azurewebsites.net/api/webhook/github?code=$
 
 After publish, confirm all three functions appear:
 ```
-Functions in func-runner-bvt-030226:
+Functions in func-runner-poc-bvt:
     cleanup_timer - [timerTrigger]
     github_webhook - [httpTrigger]
     scale_worker   - [serviceBusTrigger]

@@ -51,6 +51,11 @@ Følgende punkter fra den opprinnelige planen er nå implementert:
 - ~~6a. Ikke eksponer exception-detaljer~~ — Generisk feilmelding i webhook
 - ~~6b. requests.Session()~~ — Modul-nivå HTTP session pooling
 - ~~7c. Opprett resource group~~ — Konfigurerbar via `create_resource_group`
+- ~~Fjern ubrukte app settings~~ — `RUNNER_IDLE_TIMEOUT_MIN` og `EVENT_POLL_INTERVAL_SEC` fjernet fra Function App (aldri lest av Python-koden)
+- ~~Fiks demo workflow retry~~ — Retry-løkker feiler nå korrekt etter 3 forsøk i stedet for å returnere suksess
+- ~~Oppdater stale referanser~~ — `local.settings.example.json`, `DEPLOYMENT.md` og README bruker nå CAF-navnekonvensjoner
+- ~~Samkjør provider-versjoner~~ — Bootstrap og demo bruker nå `>= 4.63` som resten av modulen
+- ~~Oppdater README scaler-dokumentasjon~~ — Reflekterer ny at-capacity logikk med sleep/recheck og GitHub job status-sjekk
 
 
 ---
