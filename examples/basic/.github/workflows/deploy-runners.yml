@@ -12,7 +12,14 @@
 #     AZURE_SUBSCRIPTION_ID — Target subscription ID
 #
 #   Variables:
+#     WORKLOAD              — e.g. runner
+#     ENVIRONMENT           — e.g. prod
+#     INSTANCE              — e.g. 001
+#     AZURE_LOCATION        — e.g. westeurope
+#     GH_ORG                — e.g. your-org
+#     GH_REPO               — e.g. your-org/your-repo
 #     RUNNER_MODULE_REF     — Git ref for the module (e.g. v2.0.0)
+#     RUNNER_WORKLOAD_ROLES — Comma-separated Azure roles for runner identity (optional)
 # ==============================================================================
 
 name: Deploy Runners
@@ -53,7 +60,6 @@ jobs:
     outputs:
       function_app_name: ${{ steps.tf-output.outputs.function_app_name }}
       resource_group: ${{ steps.tf-output.outputs.resource_group_name }}
-      acr_name: ${{ steps.tf-output.outputs.acr_login_server }}
 
     defaults:
       run:
@@ -75,6 +81,33 @@ jobs:
         with:
           terraform_version: "~> 1.9"
           terraform_wrapper: false
+
+      - name: Generate terraform.tfvars
+        env:
+          WORKLOAD:               ${{ vars.WORKLOAD }}
+          ENVIRONMENT:            ${{ vars.ENVIRONMENT }}
+          INSTANCE:               ${{ vars.INSTANCE }}
+          LOCATION:               ${{ vars.AZURE_LOCATION }}
+          SUBSCRIPTION_ID:        ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          GH_ORG:                 ${{ vars.GH_ORG }}
+          GH_REPO:                ${{ vars.GH_REPO }}
+          RUNNER_WORKLOAD_ROLES:  ${{ vars.RUNNER_WORKLOAD_ROLES || '' }}
+        run: |
+          if [ -z "$RUNNER_WORKLOAD_ROLES" ]; then
+            ROLES_TF="[]"
+          else
+            ROLES_TF=$(echo "$RUNNER_WORKLOAD_ROLES" | jq -R 'split(",") | map(select(length > 0) | gsub("^\\s+|\\s+$"; ""))')
+          fi
+          cat > terraform.tfvars <<EOF
+          workload        = "$WORKLOAD"
+          environment     = "$ENVIRONMENT"
+          instance        = "$INSTANCE"
+          location        = "$LOCATION"
+          subscription_id = "$SUBSCRIPTION_ID"
+          github_org      = "$GH_ORG"
+          github_repo     = "$GH_REPO"
+          runner_workload_roles = $ROLES_TF
+          EOF
 
       - name: Terraform init
         run: terraform init -input=false -upgrade
@@ -103,7 +136,6 @@ jobs:
         run: |
           echo "function_app_name=$(terraform output -raw function_app_name)" >> "$GITHUB_OUTPUT"
           echo "resource_group_name=$(terraform output -raw resource_group_name)" >> "$GITHUB_OUTPUT"
-          echo "acr_login_server=$(terraform output -raw acr_login_server)" >> "$GITHUB_OUTPUT"
 
   # ----------------------------------------------------------------------------
   # Stage 2 — Scaler Function App code

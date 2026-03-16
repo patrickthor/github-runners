@@ -1,45 +1,41 @@
 # ==============================================================================
 # Basic example — minimal module usage for consuming projects
 #
-# This shows the minimum configuration needed to deploy the runner platform.
-# Copy this to your project and adjust the values.
+# All values are driven by variables (set via GitHub repo variables + the
+# workflow's "Generate terraform.tfvars" step). Edit defaults in variables.tf
+# or override via tfvars.
 # ==============================================================================
 
 module "runners" {
   source = "github.com/patrickthor/github-runners//modules/runners?ref=v2.0.0"
 
   # Core naming — generates all resource names automatically
-  workload    = "runner"
-  environment = "prod"
-  instance    = "001"
-  location    = "westeurope"
+  workload    = var.workload
+  environment = var.environment
+  instance    = var.instance
+  location    = var.location
 
   # GitHub configuration
-  github_org  = "your-org"
-  github_repo = "your-org/your-repo"
+  github_org  = var.github_org
+  github_repo = var.github_repo
 
-  # Key Vault secret names — these secrets must exist in the Key Vault
-  # before the Function App can start. See README for setup instructions.
-  github_app_id_secret_name              = "github-app-id"
-  github_app_installation_id_secret_name = "github-app-installation-id"
-  github_app_private_key_secret_name     = "github-app-private-key"
+  # Key Vault secret names
+  github_app_id_secret_name              = var.github_app_id_secret_name
+  github_app_installation_id_secret_name = var.github_app_installation_id_secret_name
+  github_app_private_key_secret_name     = var.github_app_private_key_secret_name
 
-  # Optional: webhook signature validation
-  # webhook_secret_secret_name = "github-webhook-secret"
-
-  # Optional: grant Azure roles to runner identity (empty = least privilege)
-  # runner_workload_roles = ["Contributor"]
-
-  # Optional: tune runner sizing
-  # cpu                  = 2
-  # memory               = 4
-  # runner_max_instances  = 10
-  # runner_labels         = "azure,container-instance,self-hosted"
+  # Runner identity roles (empty = least privilege)
+  runner_workload_roles = var.runner_workload_roles
 }
 
 # ==============================================================================
 # Outputs — useful for webhook setup and debugging
 # ==============================================================================
+
+output "function_app_name" {
+  description = "Function App name (needed by the deploy workflow)"
+  value       = module.runners.function_app_name
+}
 
 output "function_app_hostname" {
   description = "Use this hostname to configure the GitHub webhook"
