@@ -302,6 +302,12 @@ variable "servicebus_queue_name" {
   default     = "runner-scale-requests"
 }
 
+variable "cleanup_timer_schedule" {
+  description = "NCRONTAB schedule for the cleanup timer function. Default: every 3 minutes."
+  type        = string
+  default     = "0 */3 * * * *"
+}
+
 variable "function_runtime_version" {
   description = "Python runtime version for the scaler Function App"
   type        = string

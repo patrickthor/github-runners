@@ -377,9 +377,8 @@ def _github_installation_access_token() -> str:
     private_key_raw = _env("GITHUB_APP_PRIVATE_KEY", required=True)
 
     logging.info(
-        "GitHub App auth: app_id=%s, installation_id=%s, key_length=%d, key_starts=%s",
+        "GitHub App auth: app_id=%s, installation_id=%s, key_length=%d",
         app_id, installation_id, len(private_key_raw),
-        private_key_raw[:30].replace("\n", "\\n") if private_key_raw else "(empty)",
     )
 
     private_key = _normalize_private_key(private_key_raw)
@@ -773,7 +772,7 @@ def scale_worker(message: func.ServiceBusMessage) -> None:
 
 @app.timer_trigger(
     arg_name="timer",
-    schedule="0 * * * * *",
+    schedule="%CLEANUP_TIMER_SCHEDULE%",
     run_on_startup=False,
     use_monitor=True,
 )

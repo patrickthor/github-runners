@@ -92,6 +92,10 @@ Verified against official Microsoft documentation and Azure Well-Architected Fra
 - Fix README Key Vault secret names to match deploy workflow defaults
 - Update README scaler internals documentation
 
+- Remove private key material from logs — `_github_installation_access_token` no longer logs the first 30 chars of the private key (security hygiene)
+- Remove stale `storage_account_id` from README outputs table (was removed from code in previous cleanup)
+- Make cleanup timer schedule configurable — new `cleanup_timer_schedule` variable (NCRONTAB), default changed from every 1 minute to every 3 minutes to reduce ARM API calls at scale
+
 ---
 
 ## Not Implemented (Deliberate Decision)
@@ -106,3 +110,17 @@ Microsoft recommends Container Apps Jobs for self-hosted runners ([official tuto
 For a module intended for multiple consumers, Docker support (`docker build`, `docker push`, Docker Compose, Testcontainers) is a common requirement. Excluding this limits the module's applicability too much.
 
 **Decision**: Keep ACI as the sole compute platform. A Container Apps Jobs variant could be offered as an alternative, but the complexity of maintaining two separate implementations does not outweigh the benefits.
+
+### Service Bus Basic SKU — no dead-letter queue
+
+The module uses Service Bus Basic tier (`sku = "Basic"`), which does not support dead-letter queue (DLQ) forwarding. Messages that exhaust all 30 delivery attempts are silently discarded.
+
+This is acceptable because:
+- Permanent config errors (missing env vars, bad values) are caught and consumed silently by the `scale_worker` to avoid DLQ spam regardless of tier
+- Transient failures (ARM throttling, quota exhaustion) are retried within the function invocation itself (sleep + retry loops), so messages rarely exhaust all 30 Service Bus attempts
+- The at-capacity retry logic sleeps 100s between attempts, giving ~50 minutes of retry window before the message is abandoned
+- All failures are logged to Application Insights, which is the primary debugging tool — not the DLQ
+
+Upgrading to Standard tier (~$10/month) would enable DLQ inspection for post-mortem analysis, but adds cost with minimal operational benefit given the current retry and logging strategy.
+
+**Decision**: Keep Basic tier. The retry logic and Application Insights logging provide sufficient observability. Upgrade to Standard if you need DLQ inspection for compliance or audit requirements.

@@ -22,6 +22,7 @@
     "GITHUB_REPO": "<org>/<repo>",
     "GITHUB_ORG": "<org>",
     "GITHUB_ENVIRONMENT": "production",
+    "CLEANUP_TIMER_SCHEDULE": "0 */3 * * * *",
     "GITHUB_APP_ID": "<github-app-id>",
     "GITHUB_APP_INSTALLATION_ID": "<github-app-installation-id>",
     "GITHUB_APP_PRIVATE_KEY": "-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----",

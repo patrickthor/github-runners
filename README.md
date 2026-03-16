@@ -377,6 +377,7 @@ All resource names are auto-generated from `workload`/`environment`/`instance` u
 | `cpu` | `2` | CPU cores per runner |
 | `memory` | `4` | Memory (GB) per runner |
 | `runner_labels` | `azure,container-instance,self-hosted` | Comma-separated runner labels |
+| `cleanup_timer_schedule` | `0 */3 * * * *` | NCRONTAB schedule for the cleanup timer function |
 | `runner_workload_roles` | `[]` | Azure roles granted to runner identity at subscription scope |
 | `enable_resource_locks` | `false` | CanNotDelete locks on Key Vault and state storage |
 | `acr_sku` | `Basic` | Container Registry SKU |
@@ -400,7 +401,6 @@ All resource names are auto-generated from `workload`/`environment`/`instance` u
 | `key_vault_id` | Key Vault resource ID |
 | `servicebus_namespace_name` | Service Bus namespace name |
 | `servicebus_queue_name` | Service Bus queue name |
-| `storage_account_id` | State storage account ID |
 | `runner_pull_identity` | User-assigned identity (id, client_id, principal_id) for ACR pull |
 | `scaler_identity_principal_id` | System-assigned principal ID for scaler Function App |
 | `log_analytics_workspace_id` | Log Analytics workspace ID used for diagnostics |
