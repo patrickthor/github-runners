@@ -20,9 +20,9 @@
 #     GH_REPO               — e.g. your-org/your-repo
 #     RUNNER_MODULE_REF     — Git ref for the module (e.g. v3.0.0)
 #     RUNNER_WORKLOAD_ROLES — Comma-separated Azure roles for runner identity (optional)
-#     STATE_RESOURCE_GROUP  — Resource group containing the state storage account
-#     STATE_STORAGE_ACCOUNT — Storage account name for Terraform state
-#     STATE_CONTAINER       — Blob container name (default: tfstate)
+#     STATE_RESOURCE_GROUP  — Resource group for state storage (created if missing)
+#     STATE_STORAGE_ACCOUNT — Storage account name for Terraform state (created if missing)
+#     STATE_CONTAINER       — Blob container name (optional, default: tfstate)
 # ==============================================================================
 
 name: Deploy Runners
