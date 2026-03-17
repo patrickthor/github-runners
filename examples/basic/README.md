@@ -43,7 +43,7 @@ Follow [step 2 in the main README](../../README.md#2-provision-azure-identity-an
 | `AZURE_LOCATION` | `westeurope` | Azure region |
 | `GH_ORG` | `your-org` | GitHub organization |
 | `GH_REPO` | `your-org/your-repo` | Repository in org/repo format |
-| `RUNNER_MODULE_REF` | `v2.0.0` | Module version tag (optional, defaults to v2.0.0) |
+| `RUNNER_MODULE_REF` | `v3.0.0` | Module version tag (optional, defaults to v3.0.0) |
 | `RUNNER_WORKLOAD_ROLES` | `Contributor` | Comma-separated Azure roles for runner identity (optional) |
 
 ### 4. Configure Terraform state backend

@@ -18,7 +18,7 @@
 #     AZURE_LOCATION        — e.g. westeurope
 #     GH_ORG                — e.g. your-org
 #     GH_REPO               — e.g. your-org/your-repo
-#     RUNNER_MODULE_REF     — Git ref for the module (e.g. v2.0.0)
+#     RUNNER_MODULE_REF     — Git ref for the module (e.g. v3.0.0)
 #     RUNNER_WORKLOAD_ROLES — Comma-separated Azure roles for runner identity (optional)
 # ==============================================================================
 
@@ -41,7 +41,7 @@ env:
   TF_WORKING_DIR: infra/runners
   # Module source repo — the scaler function code is fetched from here
   MODULE_REPO: patrickthor/github-runners
-  MODULE_REF: ${{ vars.RUNNER_MODULE_REF || 'v2.0.0' }}
+  MODULE_REF: ${{ vars.RUNNER_MODULE_REF || 'v3.0.0' }}
 
 jobs:
   # ----------------------------------------------------------------------------

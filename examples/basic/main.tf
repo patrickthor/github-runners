@@ -7,7 +7,7 @@
 # ==============================================================================
 
 module "runners" {
-  source = "github.com/patrickthor/github-runners//modules/runners?ref=v2.0.0"
+  source = "github.com/patrickthor/github-runners//modules/runners?ref=v3.0.0"
 
   # Core naming — generates all resource names automatically
   workload    = var.workload
