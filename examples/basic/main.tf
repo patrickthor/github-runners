@@ -2,8 +2,7 @@
 # Basic example — minimal module usage for consuming projects
 #
 # All values are driven by variables (set via GitHub repo variables + the
-# workflow's "Generate terraform.tfvars" step). Edit defaults in variables.tf
-# or override via tfvars.
+# workflow's "Generate terraform.tfvars" step). No manual editing needed.
 # ==============================================================================
 
 module "runners" {
