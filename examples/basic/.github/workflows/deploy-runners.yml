@@ -20,6 +20,9 @@
 #     GH_REPO               — e.g. your-org/your-repo
 #     RUNNER_MODULE_REF     — Git ref for the module (e.g. v3.0.0)
 #     RUNNER_WORKLOAD_ROLES — Comma-separated Azure roles for runner identity (optional)
+#     STATE_RESOURCE_GROUP  — Resource group containing the state storage account
+#     STATE_STORAGE_ACCOUNT — Storage account name for Terraform state
+#     STATE_CONTAINER       — Blob container name (default: tfstate)
 # ==============================================================================
 
 name: Deploy Runners
@@ -109,15 +112,26 @@ jobs:
           runner_workload_roles = $ROLES_TF
           EOF
 
-      - name: Check backend configuration
+      - name: Generate backend.hcl
+        env:
+          STATE_RG:        ${{ vars.STATE_RESOURCE_GROUP }}
+          STATE_SA:        ${{ vars.STATE_STORAGE_ACCOUNT }}
+          STATE_CONTAINER: ${{ vars.STATE_CONTAINER || 'tfstate' }}
         run: |
-          if ! grep -q '^[[:space:]]*backend "azurerm"' versions.tf; then
-            echo "::error::Terraform backend is not configured. Uncomment the backend block in versions.tf and provide your state storage details. See step 4 in examples/basic/README.md."
+          if [ -z "$STATE_RG" ] || [ -z "$STATE_SA" ]; then
+            echo "::error::STATE_RESOURCE_GROUP and STATE_STORAGE_ACCOUNT variables must be set. See step 4 in the example README."
             exit 1
           fi
+          cat > backend.hcl <<EOF
+          resource_group_name  = "$STATE_RG"
+          storage_account_name = "$STATE_SA"
+          container_name       = "$STATE_CONTAINER"
+          key                  = "runners.tfstate"
+          use_oidc             = true
+          EOF
 
       - name: Terraform init
-        run: terraform init -input=false -upgrade
+        run: terraform init -input=false -backend-config=backend.hcl -upgrade
 
       - name: Terraform validate
         run: terraform validate

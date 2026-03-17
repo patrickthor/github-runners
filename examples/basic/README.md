@@ -45,18 +45,17 @@ Follow [step 2 in the main README](../../README.md#2-provision-azure-identity-an
 | `GH_REPO` | `your-org/your-repo` | Repository in org/repo format |
 | `RUNNER_MODULE_REF` | `v3.0.0` | Module version tag (optional, defaults to v3.0.0) |
 | `RUNNER_WORKLOAD_ROLES` | `Contributor` | Comma-separated Azure roles for runner identity (optional) |
+| `STATE_RESOURCE_GROUP` | `rg-tfstate` | Resource group containing the state storage account |
+| `STATE_STORAGE_ACCOUNT` | `sttfstate1a2b` | Storage account name for Terraform state |
+| `STATE_CONTAINER` | `tfstate` | Blob container name (optional, defaults to tfstate) |
 
 ### 4. Configure Terraform state backend
 
-By default, `versions.tf` uses local state (the backend block is commented out). For team use or CI/CD, configure a remote backend:
+The workflow generates a `backend.hcl` file at runtime from the `STATE_*` GitHub variables above, so you don't need to hardcode backend values in your Terraform files.
 
-**Option A — Use the module repo's bootstrap workflow** (if you have access):
-The bootstrap module in the source repo creates a Storage Account for Terraform state. Ask the module maintainer for the backend values.
-
-**Option B — Create your own state storage**:
+You just need a storage account. Either use an existing one or create one:
 
 ```bash
-# Create a storage account for Terraform state
 LOCATION=westeurope
 STATE_RG=rg-tfstate
 STATE_SA=sttfstate$(openssl rand -hex 4)  # must be globally unique
@@ -76,19 +75,9 @@ az role assignment create \
   --scope $(az storage account show --name $STATE_SA --query id -o tsv)
 ```
 
-Then uncomment the backend block in `versions.tf` and configure it:
+Then set the three `STATE_*` variables in your GitHub repo (step 3 above).
 
-```hcl
-backend "azurerm" {
-  resource_group_name  = "rg-tfstate"
-  storage_account_name = "sttfstate..."
-  container_name       = "tfstate"
-  key                  = "runners.tfstate"
-  use_oidc             = true
-}
-```
-
-> The workflow authenticates via OIDC, so `use_oidc = true` is required. No storage access keys needed.
+> The workflow authenticates via OIDC, so no storage access keys are needed.
 
 ### 5. Push to main
 
