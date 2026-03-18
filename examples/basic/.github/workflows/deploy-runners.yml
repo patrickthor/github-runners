@@ -134,7 +134,8 @@ jobs:
             echo "Creating state storage account $STATE_SA..."
             az storage account create \
               --name "$STATE_SA" --resource-group "$STATE_RG" --location "$LOCATION" \
-              --sku Standard_LRS --allow-blob-public-access false -o none
+              --sku Standard_LRS --allow-blob-public-access false \
+              --allow-shared-key-access false -o none
 
             # Grant the CI identity access to the new storage account
             PRINCIPAL_ID=$(az ad sp show --id "$CLIENT_ID" --query id -o tsv)
