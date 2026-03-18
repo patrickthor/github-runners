@@ -55,7 +55,7 @@ module "runners" {
 1. Install [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.5 and [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)
 2. Create a GitHub App — see [Create a GitHub App](#1-create-a-github-app) below
 3. Create the Azure service principal with OIDC trust — see [Provision Azure identity](#2-provision-azure-identity-and-permissions) below
-4. Follow the [`examples/basic` setup guide](examples/basic/README.md) — ready-to-use Terraform files, CI/CD workflow, and GitHub secrets/variables config. State storage is created automatically on first run.
+4. Copy the four files from [`examples/basic`](examples/basic/README.md) into your repo (`main.tf`, `variables.tf`, `versions.tf` at root + the workflow into `.github/workflows/`), then configure GitHub secrets and variables. The [setup guide](examples/basic/README.md) walks through every step. State storage is created automatically on first run.
 5. After the first deploy, [store GitHub App secrets in Key Vault](#6-store-github-app-secrets-in-key-vault)
 6. [Register the webhook in GitHub](#7-register-the-webhook-in-github)
 

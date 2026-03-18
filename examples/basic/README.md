@@ -15,9 +15,28 @@ This example shows the minimum setup needed to deploy the GitHub runners platfor
 
 ### 1. Copy files into your project
 
-Copy the Terraform files (`main.tf`, `variables.tf`, `versions.tf`) into your project root and copy `.github/workflows/deploy-runners.yml` to your repo's `.github/workflows/`.
+From this example directory, copy the following files into your own repository:
 
-If you place the Terraform files in a subdirectory (e.g. `infra/runners/`), update the `TF_WORKING_DIR` value near the top of the workflow and the `paths` trigger to match.
+| Source (this repo) | Destination (your repo) |
+|---|---|
+| `examples/basic/main.tf` | `main.tf` (repo root) |
+| `examples/basic/variables.tf` | `variables.tf` (repo root) |
+| `examples/basic/versions.tf` | `versions.tf` (repo root) |
+| `examples/basic/.github/workflows/deploy-runners.yml` | `.github/workflows/deploy-runners.yml` |
+
+Your repository should look like this after copying:
+
+```
+your-repo/
+├── .github/
+│   └── workflows/
+│       └── deploy-runners.yml    ← CI/CD workflow
+├── main.tf                       ← Module call
+├── variables.tf                  ← Variable declarations
+└── versions.tf                   ← Provider + backend config
+```
+
+> If you place the Terraform files in a subdirectory (e.g. `infra/runners/`) instead of the repo root, update both `TF_WORKING_DIR` and the `paths` trigger near the top of the workflow to match.
 
 ### 2. Create Azure identity (one-time)
 
