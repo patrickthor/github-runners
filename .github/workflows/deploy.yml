@@ -19,7 +19,7 @@
 #     STATE_STORAGE_ACCOUNT_NAME       — e.g. strunnerpocbvt (override if differs from convention)
 #     STATE_CONTAINER_NAME             — e.g. tfstate
 #     GH_ORG                           — e.g. patrickthor
-#     GH_REPO                          — e.g. patrickthor/github-runners
+#     GH_REPO                          — e.g. patrickthor/terraform-azurerm-github-runners
 # ==============================================================================
 
 name: Deploy

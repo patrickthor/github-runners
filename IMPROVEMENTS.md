@@ -184,7 +184,7 @@ Verified against official Microsoft documentation and Azure Well-Architected Fra
 - Remove dead `GITHUB_ENVIRONMENT` app setting and variable — set by Terraform but never read by Python code
 - Fix demo workflow stale plan retry — re-plan before re-apply instead of reusing stale plan file
 - Fix demo workflow Terraform version pin — aligned to `~> 1.9` like all other workflows
-- Fix CHANGELOG.md links — updated from old repo name to `patrickthor/github-runners`
+- Fix CHANGELOG.md links — updated from old repo name to `patrickthor/terraform-azurerm-github-runners`
 - Rewrite DEPLOYMENT.md for Flex Consumption — removed stale Consumption plan references and `func publish` method
 - Add auth context comment to `backend.hcl.example` — clarify `use_azuread_auth` vs `use_oidc`
 - Fix README `subscription_id` listed as required module variable — it's a provider setting, not a module input

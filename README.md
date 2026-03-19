@@ -34,7 +34,7 @@ Everything you need to use this module in your own project.
 
 ```hcl
 module "runners" {
-  source = "github.com/patrickthor/github-runners//modules/runners?ref=v3.0.0"
+  source = "github.com/patrickthor/terraform-azurerm-github-runners//modules/runners?ref=v3.0.0"
 
   workload    = "runner"
   environment = "prod"

@@ -44,7 +44,7 @@ env:
   # Adjust this path to where your Terraform config lives
   TF_WORKING_DIR: .
   # Module source repo — the scaler function code is fetched from here
-  MODULE_REPO: patrickthor/github-runners
+  MODULE_REPO: patrickthor/terraform-azurerm-github-runners
   MODULE_REF: ${{ vars.RUNNER_MODULE_REF || 'v3.0.0' }}
 
 jobs:
