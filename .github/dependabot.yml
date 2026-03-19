@@ -1,0 +1,29 @@
+version: 2
+updates:
+  # GitHub Actions — keep pinned SHAs up to date
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Python dependencies — scaler function
+  - package-ecosystem: "pip"
+    directory: "/scaler-function"
+    schedule:
+      interval: "weekly"
+
+  # Terraform providers
+  - package-ecosystem: "terraform"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+
+  - package-ecosystem: "terraform"
+    directory: "/modules/runners"
+    schedule:
+      interval: "monthly"
+
+  - package-ecosystem: "terraform"
+    directory: "/bootstrap"
+    schedule:
+      interval: "monthly"
